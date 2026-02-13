@@ -12,7 +12,10 @@
     "morgan": "^1.10.1",
     "node-cron": "^4.2.1",
     "nodemon": "^3.1.11",
-    "stripe": "^20.3.1"
+    "stripe": "^20.3.1",
+    "swagger-js": "^1.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   },
   "name": "patient-management-system",
   "version": "1.0.0",

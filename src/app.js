@@ -24,6 +24,8 @@ const queueRoute = require("./routes/queue.routes");
 const reportRoute = require("./routes/report.routes");
 const insuranceRoute = require("./routes/insurance.routes");
 const paymentRoute = require("./routes/payment.routes");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 const { stripeWebhook } = require("./controllers/payment.controller");
 
@@ -46,6 +48,7 @@ app.use(logRequest);
 
 
 // ROUTES
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/patients", patientsRoute);
