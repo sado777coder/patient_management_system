@@ -1,0 +1,36 @@
+paths:
+  /reports/patients/csv:
+    get:
+      summary: Export patients CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: CSV file }
+  /reports/dispense/csv:
+    get:
+      summary: Export dispense CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: CSV file }
+  /reports/prescriptions/csv:
+    get:
+      summary: Export prescriptions CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: CSV file }
+  /reports/labs/csv:
+    get:
+      summary: Export labs CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: CSV file }
+  /reports/records/csv:
+    get:
+      summary: Export medical records CSV
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: CSV file }

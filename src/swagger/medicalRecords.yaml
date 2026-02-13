@@ -1,0 +1,69 @@
+paths:
+  /records:
+    post:
+      summary: Create medical record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecord'
+      responses:
+        "201": { description: Medical record created }
+    get:
+      summary: Get all medical records
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of medical records }
+  /records/{id}:
+    get:
+      summary: Get medical record by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Medical record details }
+    put:
+      summary: Update medical record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicalRecord'
+      responses:
+        "200": { description: Medical record updated }
+    delete:
+      summary: Delete medical record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Medical record deleted }
+components:
+  schemas:
+    MedicalRecord:
+      type: object
+      properties:
+        patientId: { type: string }
+        doctorId: { type: string }
+        notes: { type: string }
+        diagnosis: { type: string }

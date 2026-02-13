@@ -1,0 +1,79 @@
+paths:
+  /queue:
+    post:
+      summary: Add patient to queue
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueueEntry'
+      responses:
+        "201": { description: Patient added to queue }
+  /queue/{unitId}:
+    get:
+      summary: Get queue for a unit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Queue list }
+  /queue/next/{unitId}:
+    patch:
+      summary: Mark next patient in queue
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Next patient called }
+  /queue/transfer:
+    post:
+      summary: Transfer patient between units
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Transfer'
+      responses:
+        "200": { description: Patient transferred }
+  /queue/attendance/today:
+    get:
+      summary: Get today's attendance
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: Attendance stats }
+  /queue/dashboard/queue:
+    get:
+      summary: Get queue dashboard stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: Dashboard stats }
+components:
+  schemas:
+    QueueEntry:
+      type: object
+      properties:
+        patientId: { type: string }
+        unitId: { type: string }
+        notes: { type: string }
+    Transfer:
+      type: object
+      properties:
+        patientId: { type: string }
+        fromUnitId: { type: string }
+        toUnitId: { type: string }

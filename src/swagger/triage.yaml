@@ -1,0 +1,58 @@
+paths:
+  /triage:
+    post:
+      summary: Create triage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Triage'
+      responses:
+        "201": { description: Triage created }
+    get:
+      summary: Get all triages
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of triages }
+  /triage/{id}:
+    put:
+      summary: Update triage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Triage'
+      responses:
+        "200": { description: Triage updated }
+    delete:
+      summary: Delete triage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Triage deleted }
+components:
+  schemas:
+    Triage:
+      type: object
+      properties:
+        patientId: { type: string }
+        nurseId: { type: string }
+        priority: { type: string }
+        notes: { type: string }

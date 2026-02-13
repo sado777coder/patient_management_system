@@ -1,0 +1,29 @@
+paths:
+  /admissions:
+    post:
+      summary: Admit a patient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Admission'
+      responses:
+        "201": { description: Patient admitted }
+    get:
+      summary: Get all admissions
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of admissions }
+components:
+  schemas:
+    Admission:
+      type: object
+      properties:
+        patientId: { type: string }
+        admittedBy: { type: string }
+        ward: { type: string }
+        reason: { type: string }

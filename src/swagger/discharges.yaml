@@ -1,0 +1,28 @@
+paths:
+  /discharges:
+    post:
+      summary: Discharge a patient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Discharge'
+      responses:
+        "201": { description: Patient discharged }
+    get:
+      summary: Get all discharges
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of discharges }
+components:
+  schemas:
+    Discharge:
+      type: object
+      properties:
+        patientId: { type: string }
+        dischargedBy: { type: string }
+        notes: { type: string }

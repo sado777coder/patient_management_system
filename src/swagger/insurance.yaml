@@ -1,0 +1,37 @@
+paths:
+  /claim/{invoiceId}:
+    post:
+      summary: Submit insurance claim
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Claim submitted }
+  /claim/{claimId}/approve:
+    post:
+      summary: Approve insurance claim
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Claim approved }
+  /claim/{id}/insurance:
+    get:
+      summary: Get insurance info for patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Insurance details }

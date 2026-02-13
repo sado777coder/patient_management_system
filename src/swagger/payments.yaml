@@ -1,0 +1,30 @@
+paths:
+  /payments/checkout:
+    post:
+      summary: Create Stripe checkout session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCheckout'
+      responses:
+        "201": { description: Checkout session created }
+  /payments/webhook/stripe:
+    post:
+      summary: Stripe webhook (no auth)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200": { description: Webhook received }
+components:
+  schemas:
+    PaymentCheckout:
+      type: object
+      properties:
+        patientId: { type: string }
+        amount: { type: number }

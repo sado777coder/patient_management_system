@@ -1,0 +1,29 @@
+paths:
+  /dispenses:
+    post:
+      summary: Dispense medications
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Dispense'
+      responses:
+        "201": { description: Dispense created }
+    get:
+      summary: Get all dispenses
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of dispenses }
+components:
+  schemas:
+    Dispense:
+      type: object
+      properties:
+        patientId: { type: string }
+        prescriptionId: { type: string }
+        dispensedBy: { type: string }
+        notes: { type: string }

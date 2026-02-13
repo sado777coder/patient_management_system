@@ -1,0 +1,94 @@
+openapi: 3.0.0
+info:
+  title: Patient Management System - Users
+  version: 1.0.0
+paths:
+  /users:
+    get:
+      summary: Get all users (Admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of users
+    post:
+      summary: Register a new user (Admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
+      responses:
+        "201":
+          description: User registered
+  /users/{id}:
+    get:
+      summary: Get user by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: User details
+    put:
+      summary: Update user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUser'
+      responses:
+        "200":
+          description: User updated
+    patch:
+      summary: Change role or status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Role or status updated
+    delete:
+      summary: Delete user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: User deleted
+components:
+  schemas:
+    RegisterUser:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        password: { type: string }
+    UpdateUser:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }

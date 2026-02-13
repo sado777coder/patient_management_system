@@ -1,0 +1,57 @@
+paths:
+  /beds:
+    post:
+      summary: Create a bed
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bed'
+      responses:
+        "201": { description: Bed created }
+    get:
+      summary: Get all beds
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of beds }
+  /beds/{id}:
+    put:
+      summary: Update bed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bed'
+      responses:
+        "200": { description: Bed updated }
+    delete:
+      summary: Delete bed
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Bed deleted }
+components:
+  schemas:
+    Bed:
+      type: object
+      properties:
+        number: { type: string }
+        ward: { type: string }
+        status: { type: string, enum: ["available", "occupied"] }

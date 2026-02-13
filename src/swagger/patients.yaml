@@ -1,0 +1,83 @@
+paths:
+  /patients:
+    post:
+      summary: Create patient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        "201": { description: Patient created }
+    get:
+      summary: Get all patients
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of patients
+  /patients/search:
+    get:
+      summary: Search patients
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Search results
+  /patients/{id}:
+    get:
+      summary: Get patient by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Patient details }
+    put:
+      summary: Update patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Patient'
+      responses:
+        "200": { description: Patient updated }
+    delete:
+      summary: Delete patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Patient deleted }
+components:
+  schemas:
+    Patient:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        dob: { type: string, format: date }

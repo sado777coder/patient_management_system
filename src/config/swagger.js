@@ -1,42 +1,35 @@
 const swaggerJsdoc = require("swagger-jsdoc");
+const path = require("path");
+const fs = require("fs");
+const yaml = require("js-yaml");
+
+// Load YAML files if they exist
+const swaggerDir = path.join(__dirname, "swagger");
+let swaggerYamls = [];
+
+if (fs.existsSync(swaggerDir)) {
+  swaggerYamls = fs
+    .readdirSync(swaggerDir)
+    .filter((file) => file.endsWith(".yaml"))
+    .map((file) => path.join(swaggerDir, file));
+}
 
 const options = {
   definition: {
     openapi: "3.0.0",
-
     info: {
       title: "Patient Management System API",
       version: "1.0.0",
-      description:
-        "Hospital Billing + Ledger + Insurance + Stripe Payments API",
+      description: "Hospital Billing + Ledger + Insurance + Stripe Payments API",
     },
-
     servers: [
-      {
-        url: "http://localhost:3004",
-        description: "Local server",
-      },
-      {
-        url: "https://patient-management-system-6jvc.onrender.com",
-        description: "Production server",
-      },
+      { url: "http://localhost:3004", description: "Local server" },
+      { url: "https://patient-management-system-6jvc.onrender.com", description: "Production server" },
     ],
-
-    
-      //Adds JWT auth button in Swagger UI
-    
     components: {
       securitySchemes: {
-        bearerAuth: {
-          type: "http",
-          scheme: "bearer",
-          bearerFormat: "JWT",
-        },
+        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
       },
-
-      /*
-        Optional starter schemas (you can expand later)
-      */
       schemas: {
         Patient: {
           type: "object",
@@ -48,7 +41,6 @@ const options = {
             createdAt: { type: "string" },
           },
         },
-
         Invoice: {
           type: "object",
           properties: {
@@ -58,7 +50,6 @@ const options = {
             status: { type: "string" },
           },
         },
-
         LedgerTransaction: {
           type: "object",
           properties: {
@@ -70,19 +61,10 @@ const options = {
         },
       },
     },
-
-    /*
-      Apply auth globally
-    */
-    security: [
-      {
-        bearerAuth: [],
-      },
-    ],
+    security: [{ bearerAuth: [] }],
   },
-
-  //  scan ALL files (routes + docs folder)
-  apis: ["./src/**/*.js"],
+  // Scan JS files + YAMLs
+  apis: ["./src/**/*.js", ...swaggerYamls],
 };
 
 module.exports = swaggerJsdoc(options);

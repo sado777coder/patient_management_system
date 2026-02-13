@@ -1,0 +1,67 @@
+paths:
+  /unit:
+    post:
+      summary: Create unit
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Unit'
+      responses:
+        "201": { description: Unit created }
+    get:
+      summary: Get all units
+      security:
+        - bearerAuth: []
+      responses:
+        "200": { description: List of units }
+  /unit/{id}:
+    put:
+      summary: Update unit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Unit'
+      responses:
+        "200": { description: Unit updated }
+    patch:
+      summary: Toggle unit status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Unit status updated }
+    delete:
+      summary: Delete unit
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Unit deleted }
+components:
+  schemas:
+    Unit:
+      type: object
+      properties:
+        name: { type: string }
+        status: { type: string, enum: ["active", "inactive"] }
