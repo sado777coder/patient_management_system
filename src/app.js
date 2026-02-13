@@ -1,4 +1,7 @@
 const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
 
 const logRequest = require("./middlewares/logRequest");
@@ -31,6 +34,14 @@ const { stripeWebhook } = require("./controllers/payment.controller");
 
 const app = express();
 
+// Security
+
+app.use(helmet());
+app.use(cors({
+  origin: "*", 
+}));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
+
 
 // MUST BE FIRST (Stripe requires raw body)
 app.post(
@@ -46,9 +57,16 @@ app.use(express.json());
 app.use(morgan("combined"));
 app.use(logRequest);
 
+app.get("/api/docs-json", (req, res) => {
+  res.json(swaggerSpec);
+});
+
+
+// Swagger
+app.get("/api/docs-json", (req, res) => res.json(swaggerSpec));
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ROUTES
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/patients", patientsRoute);
