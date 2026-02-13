@@ -27,8 +27,7 @@ const queueRoute = require("./routes/queue.routes");
 const reportRoute = require("./routes/report.routes");
 const insuranceRoute = require("./routes/insurance.routes");
 const paymentRoute = require("./routes/payment.routes");
-const swaggerUi = require("swagger-ui-express");
-const swaggerSpec = require("./config/swagger");
+const swagger = require("./config/swagger");
 
 const { stripeWebhook } = require("./controllers/payment.controller");
 
@@ -63,8 +62,8 @@ app.get("/api/docs-json", (req, res) => {
 
 
 // Swagger
-app.get("/api/docs-json", (req, res) => res.json(swaggerSpec));
-app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.use("/api/docs", swagger.serve, swagger.setup);
+app.get("/api/docs-json", (req, res) => res.json(swagger.json));
 
 // ROUTES
 app.use("/api/auth", authRoute);
