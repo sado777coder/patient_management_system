@@ -1,57 +1,360 @@
 openapi: 3.0.0
+
 info:
-  title: Patient Management System
+  title: Patient Management System API
   version: 1.0.0
+  description: Hospital Billing + Ledger + Insurance + Stripe Payments API
+
 servers:
-  - url: /api
+  - url: http://localhost:3004
+    description: Local
+  - url: https://patient-management-system-6jvc.onrender.com
+    description: Production
+
+security:
+  - bearerAuth: []
+
+############################################
+# PATHS
+############################################
+
+paths:
+
+  ################ AUTH ################
+  /auth/login:
+    post:
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Login' }
+      responses:
+        "200": { description: Login success }
+
+  /auth/register:
+    post:
+      summary: Register user (Admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterUser' }
+      responses:
+        "201": { description: User created }
+
+  ################ USERS ################
+  /users:
+    get:
+      summary: Get all users
+      responses:
+        "200": { description: List }
+    post:
+      summary: Create user
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterUser' }
+      responses:
+        "201": { description: Created }
+
+  /users/{id}:
+    delete:
+      summary: Delete user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+
+  ################ PATIENTS ################
+  /patients:
+    post:
+      summary: Create patient
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Patient' }
+      responses:
+        "201": { description: Created }
+    get:
+      summary: Get patients
+      responses:
+        "200": { description: List }
+
+  /patients/{id}:
+    get:
+      summary: Get patient
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: Found }
+    put:
+      summary: Update patient
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Patient' }
+      responses:
+        "200": { description: Updated }
+    delete:
+      summary: Delete patient
+      responses:
+        "204": { description: Deleted }
+
+  ################ VISITS ################
+  /visits:
+    post:
+      summary: Create visit
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Visit' }
+      responses:
+        "201": { description: Created }
+    get:
+      summary: Get visits
+      responses:
+        "200": { description: List }
+
+  ################ ADMISSIONS ################
+  /admissions:
+    post:
+      summary: Admit patient
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Admission' }
+      responses:
+        "201": { description: Admitted }
+    get:
+      summary: Get admissions
+      responses:
+        "200": { description: List }
+
+  ################ DISCHARGES ################
+  /discharges:
+    post:
+      summary: Discharge patient
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Discharge' }
+      responses:
+        "201": { description: Discharged }
+
+  ################ BEDS ################
+  /beds:
+    get:
+      summary: Get beds
+      responses:
+        "200": { description: List }
+    post:
+      summary: Create bed
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Bed' }
+      responses:
+        "201": { description: Created }
+
+  ################ UNITS ################
+  /unit:
+    get:
+      summary: Get units
+      responses:
+        "200": { description: List }
+    post:
+      summary: Create unit
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Unit' }
+      responses:
+        "201": { description: Created }
+
+  ################ TRIAGE ################
+  /triage:
+    post:
+      summary: Create triage
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Triage' }
+      responses:
+        "201": { description: Created }
+
+  ################ LAB ################
+  /lab:
+    post:
+      summary: Create lab result
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LabResult' }
+      responses:
+        "201": { description: Created }
+
+  ################ PRESCRIPTIONS ################
+  /prescriptions:
+    post:
+      summary: Create prescription
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Prescription' }
+      responses:
+        "201": { description: Created }
+
+  ################ BILLING ################
+  /billing/charge:
+    post:
+      summary: Add charge
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Charge' }
+      responses:
+        "201": { description: Created }
+
+  ################ PAYMENTS ################
+  /payments/checkout:
+    post:
+      summary: Stripe checkout
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PaymentCheckout' }
+      responses:
+        "201": { description: Session created }
+
+  ################ QUEUE ################
+  /queue:
+    post:
+      summary: Add to queue
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QueueEntry' }
+      responses:
+        "201": { description: Added }
+
+  ################ CLAIMS ################
+  /claim/{invoiceId}:
+    post:
+      summary: Submit claim
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "201": { description: Submitted }
+
+  ################ REPORTS ################
+  /reports/patients/csv:
+    get:
+      summary: Export CSV
+      responses:
+        "200": { description: CSV file }
+
+############################################
+# COMPONENTS
+############################################
+
 components:
+
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  schemas: {}
-paths:
-  # All module references
-  /auth:
-    $ref: './auth.yaml'
-  /users:
-    $ref: './users.yaml'
-  /patients:
-    $ref: './patients.yaml'
-  /visits:
-    $ref: './visits.yaml'
-  /billing:
-    $ref: './billing.yaml'
-  /lab:
-    $ref: './lab.yaml'
-  /prescriptions:
-    $ref: './prescriptions.yaml'
-  /records:
-    $ref: './medicalRecords.yaml'
-  /maternity:
-    $ref: './maternity.yaml'
-  /dispenses:
-    $ref: './dispenses.yaml'
-  /triage:
-    $ref: './triage.yaml'
-  /unit:
-    $ref: './units.yaml'
-  /queue:
-    $ref: './queue.yaml'
-  /reports:
-    $ref: './reports.yaml'
-  /claim:
-    $ref: './insurance.yaml'
-  /payments:
-    $ref: './payments.yaml'
-  /admissions:
-    $ref: './admissions.yaml'
-  /beds:
-    $ref: './beds.yaml'
-  /discharges:
-    $ref: './discharges.yaml'
-  /audit:
-    $ref: './audit.yaml'
-security:
-  - bearerAuth: []
+
+  schemas:
+
+    Login:
+      type: object
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    RegisterUser:
+      type: object
+      properties:
+        name: { type: string }
+        email: { type: string }
+        password: { type: string }
+
+    Patient:
+      type: object
+      properties:
+        name: { type: string }
+        phone: { type: string }
+        email: { type: string }
+
+    Visit:
+      type: object
+      properties:
+        patientId: { type: string }
+        reason: { type: string }
+
+    Admission:
+      type: object
+      properties:
+        patientId: { type: string }
+        ward: { type: string }
+
+    Discharge:
+      type: object
+      properties:
+        patientId: { type: string }
+
+    Bed:
+      type: object
+      properties:
+        number: { type: string }
+        ward: { type: string }
+
+    Unit:
+      type: object
+      properties:
+        name: { type: string }
+
+    Triage:
+      type: object
+      properties:
+        patientId: { type: string }
+
+    LabResult:
+      type: object
+      properties:
+        patientId: { type: string }
+
+    Prescription:
+      type: object
+      properties:
+        patientId: { type: string }
+
+    Charge:
+      type: object
+      properties:
+        patientId: { type: string }
+        amount: { type: number }
+
+    PaymentCheckout:
+      type: object
+      properties:
+        patientId: { type: string }
+        amount: { type: number }
+
+    QueueEntry:
+      type: object
+      properties:
+        patientId: { type: string }
