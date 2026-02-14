@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const prescriptionSchema = new mongoose.Schema(
   {
     visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
+     diagnosis: { type: mongoose.Schema.Types.ObjectId, ref: "Diagnosis", required: true },
 
     medications: [
       {
