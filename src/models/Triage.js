@@ -4,20 +4,29 @@ const triageSchema = new mongoose.Schema(
   {
     visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
 
-    temperature: Number,
-    bloodPressure: String,
-    pulse: Number,
-    weight: Number,
+    // Vitals
+    vitals: {
+      temperature: { type: Number },             // °C
+      bloodPressure: { type: String },           // "120/80" format
+      heartRate: { type: Number },               // bpm
+      respiratoryRate: { type: Number },         // breaths per min
+      oxygenSaturation: { type: Number },       // SpO2 %
+      weight: { type: Number },                  // kg
+      height: { type: Number },                  // cm
+    },
 
-    complaint: String,
+    // Optional complaints or notes
+    complaint: { type: String },
 
+    // Triage priority
     priority: {
       type: String,
       enum: ["low", "medium", "high", "critical"],
       default: "medium",
     },
 
-    triagedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // Reference to the user (nurse/triage officer) who performed triage
+    triagedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   },
   { timestamps: true }
 );
