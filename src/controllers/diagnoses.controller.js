@@ -1,8 +1,17 @@
 const Diagnosis = require("../models/Diagnosis");
+const Triage = require("../models/Triage");
 
 // CREATE DIAGNOSIS
 const createDiagnosis = async (req, res, next) => {
   try {
+    const triageExists = await Triage.findOne({ visit });
+
+if (!triageExists) {
+  return res.status(400).json({
+    success: false,
+    message: "Patient vitals must be completed before diagnosis",
+  });
+}
     const diagnosis = await Diagnosis.create(req.body);
     res.status(201).json({
       success: true,

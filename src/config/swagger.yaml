@@ -358,3 +358,110 @@ components:
       type: object
       properties:
         patientId: { type: string }
+
+         ################ DIAGNOSES ################
+  /diagnoses:
+    post:
+      summary: Create diagnosis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Diagnosis'
+      responses:
+        "201": { description: Diagnosis created }
+
+  /diagnoses/{id}:
+    get:
+      summary: Get diagnosis by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200": { description: Diagnosis found }
+        "404": { description: Not found }
+
+    patch:
+      summary: Update diagnosis
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Diagnosis'
+      responses:
+        "200": { description: Updated }
+
+  /diagnoses/visit/{visitId}:
+    get:
+      summary: Get all diagnoses for a visit
+      parameters:
+        - name: visitId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200": { description: List }
+
+  ################ LAB ORDERS ################
+  /lab-orders:
+    post:
+      summary: Create lab order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabOrder'
+      responses:
+        "201": { description: Lab order created }
+
+  /lab-orders/{id}:
+    get:
+      summary: Get lab order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200": { description: Found }
+
+    patch:
+      summary: Update lab order (status/results)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabOrderUpdate'
+      responses:
+        "200": { description: Updated }
+
+  /lab-orders/diagnosis/{diagnosisId}:
+    get:
+      summary: Get all lab orders for a diagnosis
+      parameters:
+        - name: diagnosisId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200": { description: List }

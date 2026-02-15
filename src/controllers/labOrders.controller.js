@@ -1,12 +1,33 @@
 const LabOrder = require("../models/LabOrder");
+const Diagnosis = require("../models/Diagnosis");
 
 // CREATE LAB ORDER
 const createLabOrder = async (req, res, next) => {
   try {
-    const labOrder = await LabOrder.create(req.body);
-    res.status(201).json({ success: true, message: "Lab order created", data: labOrder });
+    const { diagnosis, requestedBy, tests } = req.body;
+
+    const diagnosisRecord = await Diagnosis.findById(diagnosis);
+
+    if (!diagnosisRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Diagnosis not found",
+      });
+    }
+
+    const labOrder = await LabOrder.create({
+      diagnosis,
+      requestedBy,
+      tests,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Lab order created successfully",
+      data: labOrder,
+    });
   } catch (error) {
-    next(error);
+    next ( error );
   }
 };
 

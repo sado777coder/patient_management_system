@@ -1,30 +1,63 @@
 const PrescriptionModel = require("../models/Prescription");
+const Diagnosis = require("../models/Diagnosis");
 
-const createPrescription = async (req, res) => {
-  const prescription = await PrescriptionModel.create({
-    ...req.body,
-    prescribedBy: req.user._id,
-  });
+const createPrescription = async (req, res, next) => {
+  try {
+    const { visit, diagnosis, prescribedBy, medications } = req.body;
 
-  res.status(201).json({
-    success: true,
-    message: "Prescription created",
-    data: prescription,
-  });
+    const diagnosisRecord = await Diagnosis.findById(diagnosis);
+
+    if (!diagnosisRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Diagnosis not found",
+      });
+    }
+
+    // Ensure diagnosis matches visit
+    if (diagnosisRecord.visit.toString() !== visit) {
+      return res.status(400).json({
+        success: false,
+        message: "Diagnosis does not belong to this visit",
+      });
+    }
+
+    const prescription = await Prescription.create({
+      visit,
+      diagnosis,
+      prescribedBy,
+      medications,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Prescription created successfully",
+      data: prescription,
+    });
+  } catch (error) {
+    next(
+      error
+    );
+  }
 };
 
-const getPrescriptions = async (req, res) => {
-  const prescriptions = await PrescriptionModel.find({ isDeleted: false })
+const getPrescriptions = async (req, res, next) => {
+ try {
+   const prescriptions = await PrescriptionModel.find({ isDeleted: false })
     .populate("visit prescribedBy");
 
   res.json({
     success: true,
     data: prescriptions,
   });
+ } catch (error) {
+  next (error);
+ }
 };
 
-const updatePrescription = async (req, res) => {
-  delete req.body.isDeleted;
+const updatePrescription = async (req, res, next) => {
+  try {
+    delete req.body.isDeleted;
 
   const prescription = await PrescriptionModel.findOneAndUpdate(
     { _id: req.params.id, isDeleted: false },
@@ -37,10 +70,14 @@ const updatePrescription = async (req, res) => {
     message: "Updated",
     data: prescription,
   });
+  } catch (error) {
+    next (error);
+  }
 };
 
-const deletePrescription = async (req, res) => {
-  await PrescriptionModel.findByIdAndUpdate(req.params.id, {
+const deletePrescription = async (req, res, next) => {
+ try {
+   await PrescriptionModel.findByIdAndUpdate(req.params.id, {
     isDeleted: true,
   });
 
@@ -48,6 +85,9 @@ const deletePrescription = async (req, res) => {
     success: true,
     message: "Deleted",
   });
+ } catch (error) {
+  next (error);
+ }
 };
 
 module.exports = {

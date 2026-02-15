@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 
 const triageSchema = new mongoose.Schema(
   {
-    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
+    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", 
+      required: true,
+       unique: true},
 
     // Vitals
     vitals: {

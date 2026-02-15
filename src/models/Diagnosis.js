@@ -2,7 +2,9 @@ const mongoose = require("mongoose");
 
 const diagnosisSchema = new mongoose.Schema(
   {
-    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
+    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit",
+       required: true,
+      unique: true },
     diagnosedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     symptoms: { type: String, required: true },
     signs: { type: String },
