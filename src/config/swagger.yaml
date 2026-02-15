@@ -3,7 +3,7 @@ openapi: 3.0.0
 info:
   title: Patient Management System API
   version: 1.0.0
-  description: Hospital Billing + Ledger + Insurance + Stripe Payments API
+  description: Hospital ERP - Patients, Visits, Admissions, Diagnosis, Lab, Billing, Payments
 
 servers:
   - url: http://localhost:3004
@@ -29,9 +29,11 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Login' }
+            schema:
+              $ref: '#/components/schemas/Login'
       responses:
-        "200": { description: Login success }
+        "200":
+          description: Login successful
 
   /auth/register:
     post:
@@ -40,230 +42,256 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RegisterUser' }
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
       responses:
-        "201": { description: User created }
+        "201":
+          description: User created
 
   ################ USERS ################
   /users:
     get:
       summary: Get all users
       responses:
-        "200": { description: List }
+        "200":
+          description: Users list
     post:
       summary: Create user
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/RegisterUser' }
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
       responses:
-        "201": { description: Created }
+        "201":
+          description: User created
 
   /users/{id}:
     delete:
       summary: Delete user
       parameters:
-        - name: id
-          in: path
+        - in: path
+          name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "204": { description: Deleted }
+        "204":
+          description: Deleted
 
   ################ PATIENTS ################
   /patients:
     post:
       summary: Create patient
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Patient' }
+            schema:
+              $ref: '#/components/schemas/Patient'
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
     get:
       summary: Get patients
       responses:
-        "200": { description: List }
+        "200":
+          description: List
 
   /patients/{id}:
     get:
       summary: Get patient
       parameters:
-        - name: id
-          in: path
+        - in: path
+          name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: Found }
+        "200":
+          description: Found
     put:
       summary: Update patient
       requestBody:
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Patient' }
+            schema:
+              $ref: '#/components/schemas/Patient'
       responses:
-        "200": { description: Updated }
+        "200":
+          description: Updated
     delete:
       summary: Delete patient
       responses:
-        "204": { description: Deleted }
+        "204":
+          description: Deleted
 
   ################ VISITS ################
   /visits:
     post:
       summary: Create visit
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Visit' }
+            schema:
+              $ref: '#/components/schemas/Visit'
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
     get:
       summary: Get visits
       responses:
-        "200": { description: List }
+        "200":
+          description: List
 
   ################ ADMISSIONS ################
   /admissions:
     post:
       summary: Admit patient
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Admission' }
+            schema:
+              $ref: '#/components/schemas/Admission'
       responses:
-        "201": { description: Admitted }
+        "201":
+          description: Admitted
     get:
       summary: Get admissions
       responses:
-        "200": { description: List }
+        "200":
+          description: List
 
   ################ DISCHARGES ################
   /discharges:
     post:
       summary: Discharge patient
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Discharge' }
+            schema:
+              $ref: '#/components/schemas/Discharge'
       responses:
-        "201": { description: Discharged }
+        "201":
+          description: Discharged
 
-  ################ BEDS ################
-  /beds:
-    get:
-      summary: Get beds
-      responses:
-        "200": { description: List }
-    post:
-      summary: Create bed
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Bed' }
-      responses:
-        "201": { description: Created }
-
-  ################ UNITS ################
-  /unit:
-    get:
-      summary: Get units
-      responses:
-        "200": { description: List }
-    post:
-      summary: Create unit
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Unit' }
-      responses:
-        "201": { description: Created }
-
-  ################ TRIAGE ################
-  /triage:
+  ################ TRIAGES ################
+  /triages:
     post:
       summary: Create triage
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Triage' }
+            schema:
+              $ref: '#/components/schemas/Triage'
       responses:
-        "201": { description: Created }
+        "201":
+          description: Created
 
-  ################ LAB ################
-  /lab:
+  ################ DIAGNOSES ################
+  /diagnoses:
     post:
-      summary: Create lab result
+      summary: Create diagnosis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Diagnosis'
+      responses:
+        "201":
+          description: Diagnosis created
+
+  /diagnoses/{id}:
+    get:
+      summary: Get diagnosis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Found
+    patch:
+      summary: Update diagnosis
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
       requestBody:
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/LabResult' }
+            schema:
+              $ref: '#/components/schemas/Diagnosis'
       responses:
-        "201": { description: Created }
+        "200":
+          description: Updated
+
+  ################ LAB ORDERS ################
+  /lab-orders:
+    post:
+      summary: Create lab order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabOrder'
+      responses:
+        "201":
+          description: Created
+
+  /lab-orders/{id}:
+    get:
+      summary: Get lab order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Found
+    patch:
+      summary: Update lab order
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabOrderUpdate'
+      responses:
+        "200":
+          description: Updated
 
   ################ PRESCRIPTIONS ################
   /prescriptions:
     post:
       summary: Create prescription
       requestBody:
+        required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/Prescription' }
+            schema:
+              $ref: '#/components/schemas/Prescription'
       responses:
-        "201": { description: Created }
-
-  ################ BILLING ################
-  /billing/charge:
-    post:
-      summary: Add charge
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/Charge' }
-      responses:
-        "201": { description: Created }
-
-  ################ PAYMENTS ################
-  /payments/checkout:
-    post:
-      summary: Stripe checkout
-      security: []
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PaymentCheckout' }
-      responses:
-        "201": { description: Session created }
-
-  ################ QUEUE ################
-  /queue:
-    post:
-      summary: Add to queue
-      requestBody:
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/QueueEntry' }
-      responses:
-        "201": { description: Added }
-
-  ################ CLAIMS ################
-  /claim/{invoiceId}:
-    post:
-      summary: Submit claim
-      parameters:
-        - name: invoiceId
-          in: path
-          required: true
-          schema: { type: string }
-      responses:
-        "201": { description: Submitted }
-
-  ################ REPORTS ################
-  /reports/patients/csv:
-    get:
-      summary: Export CSV
-      responses:
-        "200": { description: CSV file }
+        "201":
+          description: Created
 
 ############################################
 # COMPONENTS
@@ -281,187 +309,128 @@ components:
 
     Login:
       type: object
+      required: [email, password]
       properties:
-        email: { type: string }
-        password: { type: string }
+        email:
+          type: string
+        password:
+          type: string
 
     RegisterUser:
       type: object
+      required: [name, email, password]
       properties:
-        name: { type: string }
-        email: { type: string }
-        password: { type: string }
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
 
     Patient:
       type: object
+      required: [name]
       properties:
-        name: { type: string }
-        phone: { type: string }
-        email: { type: string }
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
 
     Visit:
       type: object
+      required: [patientId, reason]
       properties:
-        patientId: { type: string }
-        reason: { type: string }
+        patientId:
+          type: string
+        reason:
+          type: string
 
     Admission:
       type: object
+      required: [patientId, ward]
       properties:
-        patientId: { type: string }
-        ward: { type: string }
+        patientId:
+          type: string
+        ward:
+          type: string
 
     Discharge:
       type: object
+      required: [patientId]
       properties:
-        patientId: { type: string }
-
-    Bed:
-      type: object
-      properties:
-        number: { type: string }
-        ward: { type: string }
-
-    Unit:
-      type: object
-      properties:
-        name: { type: string }
+        patientId:
+          type: string
 
     Triage:
       type: object
+      required: [visit, triagedBy]
       properties:
-        patientId: { type: string }
+        visit:
+          type: string
+        triagedBy:
+          type: string
+        complaint:
+          type: string
 
-    LabResult:
+    Diagnosis:
+      type: object
+      required: [visit, diagnosedBy, symptoms, diagnosis]
+      properties:
+        visit:
+          type: string
+        diagnosedBy:
+          type: string
+        symptoms:
+          type: string
+        signs:
+          type: string
+        diagnosis:
+          type: string
+        investigations:
+          type: array
+          items:
+            type: string
+        notes:
+          type: string
+
+    LabOrder:
+      type: object
+      required: [diagnosis, requestedBy, tests]
+      properties:
+        diagnosis:
+          type: string
+        requestedBy:
+          type: string
+        tests:
+          type: array
+          items:
+            type: string
+
+    LabOrderUpdate:
       type: object
       properties:
-        patientId: { type: string }
+        status:
+          type: string
+          enum: [pending, completed]
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              test:
+                type: string
+              result:
+                type: string
+              normalRange:
+                type: string
 
     Prescription:
       type: object
+      required: [visit, prescribedBy]
       properties:
-        patientId: { type: string }
-
-    Charge:
-      type: object
-      properties:
-        patientId: { type: string }
-        amount: { type: number }
-
-    PaymentCheckout:
-      type: object
-      properties:
-        patientId: { type: string }
-        amount: { type: number }
-
-    QueueEntry:
-      type: object
-      properties:
-        patientId: { type: string }
-
-         ################ DIAGNOSES ################
-  /diagnoses:
-    post:
-      summary: Create diagnosis
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Diagnosis'
-      responses:
-        "201": { description: Diagnosis created }
-
-  /diagnoses/{id}:
-    get:
-      summary: Get diagnosis by ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200": { description: Diagnosis found }
-        "404": { description: Not found }
-
-    patch:
-      summary: Update diagnosis
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Diagnosis'
-      responses:
-        "200": { description: Updated }
-
-  /diagnoses/visit/{visitId}:
-    get:
-      summary: Get all diagnoses for a visit
-      parameters:
-        - name: visitId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200": { description: List }
-
-  ################ LAB ORDERS ################
-  /lab-orders:
-    post:
-      summary: Create lab order
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LabOrder'
-      responses:
-        "201": { description: Lab order created }
-
-  /lab-orders/{id}:
-    get:
-      summary: Get lab order by ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200": { description: Found }
-
-    patch:
-      summary: Update lab order (status/results)
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LabOrderUpdate'
-      responses:
-        "200": { description: Updated }
-
-  /lab-orders/diagnosis/{diagnosisId}:
-    get:
-      summary: Get all lab orders for a diagnosis
-      parameters:
-        - name: diagnosisId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200": { description: List }
+        visit:
+          type: string
+        prescribedBy:
+          type: string
