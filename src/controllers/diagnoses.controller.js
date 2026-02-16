@@ -4,6 +4,7 @@ const Triage = require("../models/Triage");
 // CREATE DIAGNOSIS
 const createDiagnosis = async (req, res, next) => {
   try {
+    const { visit } = req.body;
     const triageExists = await Triage.findOne({ visit });
 
 if (!triageExists) {
