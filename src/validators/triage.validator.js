@@ -17,6 +17,7 @@ const createTriageValidator = Joi.object({
       }),
     heartRate: Joi.number().min(20).max(250).optional(),
     respiratoryRate: Joi.number().min(5).max(60).optional(),
+    pulse:Joi.number().min(0).max(200).optional(),
     oxygenSaturation: Joi.number().min(50).max(100).optional(),
     weight: Joi.number().min(1).max(500).optional(),
     height: Joi.number().min(30).max(300).optional(),
