@@ -12,6 +12,7 @@ const triageSchema = new mongoose.Schema(
       bloodPressure: { type: String },           // "120/80" format
       heartRate: { type: Number },               // bpm
       respiratoryRate: { type: Number },         // breaths per min
+      pulse: {type:Number},
       oxygenSaturation: { type: Number },       // SpO2 %
       weight: { type: Number },                  // kg
       height: { type: Number },                  // cm
