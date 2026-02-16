@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const requireAuth = require("../middlewares/requireAuth");
 const allowRoles = require("../middlewares/rbac");
 const permissions = require("../middlewares/permissions");
 const {
@@ -10,6 +11,8 @@ const {
 } = require("../controllers/diagnoses.controller");
 const { createDiagnosisValidator, updateDiagnosisValidator } = require("../validators/diagnosis.validator");
 const validate = require("../middlewares/validate"); // middleware to run Joi validation
+
+router.use(requireAuth);
 
 router.post("/", 
     allowRoles(permissions.PRESCRIBE)
