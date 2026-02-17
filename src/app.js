@@ -65,14 +65,13 @@ app.get("/api/docs-json", (req, res) => {
 
 // Swagger
 app.get("/api/docs-json", (req, res) => res.json(swaggerSpec));
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  stripeWebhook
-);
 
 app.get("/cancel", (req, res) => {
-  res.send("❌ Payment Cancelled");
+  res.send(" Payment Cancelled");
+});
+
+app.get("/success", (req, res) => {
+  res.send(" Payment Successful");
 });
 
 // Swagger UI
