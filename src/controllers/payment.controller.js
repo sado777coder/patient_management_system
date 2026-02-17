@@ -18,7 +18,7 @@ const createStripeCheckout = async (req, res, next) => {
       line_items: [
         {
           price_data: {
-            currency: "ghs",
+            currency: "usd",
             product_data: { name: "Hospital Bill Payment" },
             unit_amount: Math.round(amount * 100),
           },
