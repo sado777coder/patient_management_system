@@ -1,8 +1,10 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const morgan = require("morgan");
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const logRequest = require("./middlewares/logRequest");
 const errorHandler = require("./middlewares/errorHandler");
@@ -31,53 +33,64 @@ const diagnosisRoute = require("./routes/diagnoses.routes");
 const labOrderRoute = require("./routes/labOrders.routes");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
 
-const { stripeWebhook } = require("./controllers/payment.controller");
-
 const app = express();
 
-// Security
-
+// --- Security Middleware ---
 app.use(helmet());
-app.use(cors({
-  origin: "*", 
-}));
+app.use(cors({ origin: "*" }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
-
-
-// MUST BE FIRST (Stripe requires raw body)
-app.post(
-  "/api/stripe/webhook",
-  express.raw({ type: "application/json" }),
-  stripeWebhook
-);
-
-
-// normal JSON middleware AFTER webhook
-app.use(express.json());
-
 app.use(morgan("combined"));
 app.use(logRequest);
 
-app.get("/api/docs-json", (req, res) => {
-  res.json(swaggerSpec);
-});
+// --- Stripe Webhook Route (must be BEFORE express.json())
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+    let event;
 
-// Swagger
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } catch (err) {
+      console.log("Webhook signature verification failed.", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle Stripe events
+    switch (event.type) {
+      case "payment_intent.succeeded":
+        const paymentIntent = event.data.object;
+        console.log("PaymentIntent was successful!", paymentIntent.id);
+        break;
+      case "charge.succeeded":
+        const charge = event.data.object;
+        console.log(" Charge succeeded:", charge.id);
+        break;
+      default:
+        console.log(` Unhandled Stripe event: ${event.type}`);
+    }
+
+    res.send(); // acknowledge receipt
+  }
+);
+
+// --- JSON body parser for normal requests (AFTER webhook) ---
+app.use(express.json());
+
+// --- Swagger JSON ---
 app.get("/api/docs-json", (req, res) => res.json(swaggerSpec));
 
-app.get("/cancel", (req, res) => {
-  res.send(" Payment Cancelled");
-});
-
-app.get("/success", (req, res) => {
-  res.send(" Payment Successful");
-});
-
-// Swagger UI
+// --- Swagger UI ---
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// ROUTES
+// --- Payment routes for success/cancel pages ---
+app.get("/cancel", (req, res) => res.send("Payment Cancelled"));
+app.get("/success", (req, res) => res.send("Payment Successful"));
+
+// --- Main Routes ---
 app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/patients", patientsRoute);
@@ -101,8 +114,7 @@ app.use("/api/beds", bedRoute);
 app.use("/api/discharges", dischargeRoute);
 app.use("/api/admissions", admissionRoute);
 
-
-// ERROR HANDLER LAST
+// --- Error handler (last) ---
 app.use(errorHandler);
 
 module.exports = app;
