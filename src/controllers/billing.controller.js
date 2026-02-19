@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Billing = require("../models/Billing");
 const Ledger = require("../models/LedgerTransaction");
+const Invoice = require("../models/Invoice");
 
  //CREATE CHARGE
 const createCharge = async (req, res, next) => {
@@ -199,15 +200,25 @@ const generateInvoice = async (req, res, next) => {
       type: "charge",
     });
 
+    if (!charges.length)
+      return res.status(400).json({ message: "No charges found" });
+
+    // Calculate total
     const total = charges.reduce((sum, t) => sum + t.amount, 0);
 
-    res.json({
-      success: true,
-      invoiceNumber: `INV-${Date.now()}`,
+    // Create invoice
+    const invoice = await Invoice.create({
       patient: patientId,
-      items: charges,
-      total,
-      balance: account.balance,
+      transactions: charges.map((c) => c._id),
+      invoiceNumber: `INV-${Date.now()}`,
+      totalAmount: total,
+      status: "unpaid",
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Invoice generated successfully",
+      data: invoice,
     });
   } catch (error) {
     next(error);
