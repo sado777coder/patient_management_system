@@ -1,6 +1,8 @@
 const router = require("express").Router();
 const requireAuth = require("../middlewares/requireAuth");
 const cache = require("../middlewares/cache");
+const permissions = require("../middlewares/permissions");
+const allowRoles = require("../middlewares/rbac");
 
 const {
   submitClaim,
@@ -10,8 +12,13 @@ const {
 
 router.use(requireAuth);
 
-router.post("/:invoiceId", submitClaim);
-router.post("/:claimId/approve", approveClaim);
+router.post("/:invoiceId",
+  allowRoles(permissions.BILL),
+   submitClaim);
+
+router.post("/:claimId/approve",
+   allowRoles(permissions.BILL),
+   approveClaim);
 
 router.get(
   "/:id/insurance",
