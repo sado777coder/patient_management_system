@@ -1,29 +1,102 @@
+const mongoose = require("mongoose");
 const DischargeModel = require("../models/Discharge");
 const AdmissionModel = require("../models/Admission");
 const BedModel = require("../models/Bed");
+const BillModel = require("../models/Billing"); // if you have billing
 
 const dischargePatient = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const admission = await AdmissionModel.findById(req.body.admission);
+    const { admission, summary } = req.body;
 
-    admission.status = "discharged";
-    await admission.save();
+    const admissionRecord = await AdmissionModel.findById(admission).session(session);
 
-    const bed = await BedModel.findById(admission.bed);
-    bed.isOccupied = false;
-    await bed.save();
+    if (!admissionRecord) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: "Admission not found" });
+    }
 
-    const discharge = await DischargeModel.create({
-      ...req.body,
+    if (admissionRecord.status === "discharged") {
+      await session.abortTransaction();
+      return res.status(400).json({ message: "Patient already discharged" });
+    }
+
+    // OPTIONAL: Prevent discharge if unpaid bills exist
+    const unpaidBills = await BillModel.find({
+      patient: admissionRecord.patient,
+      status: "UNPAID",
+    }).session(session);
+
+    if (unpaidBills.length > 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        message: "Outstanding bills must be paid before discharge",
+      });
+    }
+
+    // Calculate Length of Stay
+    const dischargedAt = new Date();
+    const lengthOfStay =
+      (dischargedAt - admissionRecord.createdAt) / (1000 * 60 * 60 * 24);
+
+    // Update admission
+    admissionRecord.status = "discharged";
+    admissionRecord.dischargedAt = dischargedAt;
+    admissionRecord.lengthOfStay = Math.ceil(lengthOfStay);
+    await admissionRecord.save({ session });
+
+    // Free bed
+    await BedModel.findByIdAndUpdate(
+      admissionRecord.bed,
+      { isOccupied: false },
+      { session }
+    );
+
+   // Create discharge record
+const discharge = await DischargeModel.create(
+  [
+    {
+      admission,
+      patient: admissionRecord.patient,
+      summary,
       dischargedBy: req.user._id,
-    });
+    },
+  ],
+  { session }
+);
+
+// Create Audit Log
+await AuditLogModel.create(
+  [
+    {
+      user: req.user._id,
+      action: "DISCHARGE_PATIENT",
+      collection: "Discharge",
+      documentId: discharge[0]._id,
+      metadata: {
+        patient: admissionRecord.patient,
+        admission: admission,
+        lengthOfStay: Math.ceil(lengthOfStay),
+      },
+    },
+  ],
+  { session }
+);
+
+    await session.commitTransaction();
+    session.endSession();
 
     res.status(201).json({
       success: true,
-      message: "Patient discharged",
-      data: discharge,
+      message: "Patient discharged successfully",
+      data: discharge[0],
     });
+
   } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
     next(err);
   }
 };
