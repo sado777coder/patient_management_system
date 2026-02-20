@@ -19,7 +19,7 @@ const {
 
 router.use(requireAuth);
 
-router.post("/", allowRoles(permissions.TRIAGE,permissions.ADMIN), 
+router.post("/", allowRoles(permissions.TRIAGE,permissions.MANAGE_USERS), 
 validate(createBedValidator), createBed);
 
 router.get("/", getBeds);
