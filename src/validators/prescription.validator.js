@@ -3,6 +3,8 @@ const Joi = require("joi");
 const createPrescriptionValidator = Joi.object({
   visit: Joi.string().required(),
 
+  diagnosis: Joi.string().required(), 
+
   medications: Joi.array()
     .items(
       Joi.object({
