@@ -71,9 +71,9 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
     ]);
 
     const avgLengthOfStay =
-      avgLengthOfStayData.length > 0
-        ? avgLengthOfStayData[0].avgLengthOfStay.toFixed(2)
-        : 0;
+  avgLengthOfStayData?.[0]?.avgLengthOfStay != null
+    ? avgLengthOfStayData[0].avgLengthOfStay.toFixed(2)
+    : "0.00";
 
     res.status(200).json({
       success: true,
