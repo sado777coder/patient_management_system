@@ -24,10 +24,10 @@ validate(createBedValidator), createBed);
 
 router.get("/", getBeds);
 
-router.put("/:id",allowRoles(permissions.TRIAGE,permissions.ADMIN),
+router.put("/:id",allowRoles(permissions.TRIAGE,permissions.MANAGE_USERS),
  validate(updateBedValidator), updateBed);
 
-router.delete("/:id", allowRoles(permissions.TRIAGE,permissions.ADMIN),
+router.delete("/:id", allowRoles(permissions.TRIAGE,permissions.MANAGE_USERS),
  deleteBed);
 
 module.exports = router;
