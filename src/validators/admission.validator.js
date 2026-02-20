@@ -7,6 +7,7 @@ const createAdmissionValidator = Joi.object({
   patient: Joi.string().required(),
 
   visit: Joi.string().optional(),
+  ward:Joi.string().required(),
 
   bed: Joi.string().required(),
 });
@@ -16,6 +17,7 @@ const createAdmissionValidator = Joi.object({
  * UPDATE ADMISSION
  */
 const updateAdmissionValidator = Joi.object({
+  ward:Joi.string().optional(),
   bed: Joi.string().optional(),
 
   status: Joi.string()
