@@ -80,7 +80,7 @@ app.post(
 );
 
 // --- JSON body parser for normal requests (AFTER webhook) ---
-app.use(express.json());
+app.use(express.json({ strict: false }));
 
 // --- Swagger JSON ---
 app.get("/api/docs-json", (req, res) => res.json(swaggerSpec));
