@@ -16,7 +16,7 @@ router.use(requireAuth);
 
 router.post(
   "/",
-  allowRoles(permissions.ADMIN),
+  allowRoles(permissions.TRIAGE,permissions.MANAGE_USERS),
   validate(createAdmissionValidator),
   admitPatient
 );
