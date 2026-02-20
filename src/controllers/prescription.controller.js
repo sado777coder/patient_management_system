@@ -22,7 +22,7 @@ const createPrescription = async (req, res, next) => {
       });
     }
 
-    const prescription = await Prescription.create({
+    const prescription = await PrescriptionModel.create({
       visit,
       diagnosis,
       prescribedBy,
