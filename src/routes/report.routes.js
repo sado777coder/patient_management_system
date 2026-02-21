@@ -13,7 +13,9 @@ const {
 } = require("../controllers/report.controller");
 
 router.use(requireAuth);
-router.use(allowRoles(permissions.REGISTER_PATIENT));
+router.use(allowRoles(permissions.REGISTER_PATIENT, 
+permissions.MANAGE_USERS
+));
 
 router.get("/patients/csv", exportPatientsCSV);
 router.get("/dispense/csv", exportDispenseCSV);
