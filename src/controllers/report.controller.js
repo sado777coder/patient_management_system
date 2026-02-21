@@ -1,12 +1,10 @@
 const { Parser } = require("json2csv");
-
-const Patient = require("../models/Patient");
 const Dispense = require("../models/Dispense");
+const Patient = require("../models/Patient");
 const Prescription = require("../models/Prescription");
 const Lab = require("../models/LabResult");
 const MedicalRecord = require("../models/MedicalRecord");
 const redis = require("../config/redis");
-
 
 // SHARED CSV HELPER
 
@@ -24,22 +22,21 @@ const sendCSV = (res, rows, filename) => {
   res.send(csv);
 };
 
-
 // PATIENT EXPORT
 
 const exportPatientsCSV = async (req, res, next) => {
   try {
     const cacheKey = `csv:patients:${JSON.stringify(req.query)}`;
-
     const cached = await redis.get(cacheKey);
+
     if (cached) {
-      res.header("Content-Type", "text/csv");
-      res.attachment("patients-report.csv");
-      return res.send(cached);
+      return res
+        .header("Content-Type", "text/csv")
+        .attachment("patients-report.csv")
+        .send(cached);
     }
 
     const { from, to, unit, q } = req.query;
-
     const filter = { isDeleted: false };
 
     if (from || to) {
@@ -86,80 +83,47 @@ const exportPatientsCSV = async (req, res, next) => {
     res.header("Content-Type", "text/csv");
     res.attachment("patients-report.csv");
     res.send(csv);
-
   } catch (err) {
     next(err);
   }
 };
-
-
-// DISPENSE EXPORT
-
-const exportDispenseCSV = async (req, res, next) => {
-  try {
-    const cacheKey = `csv:dispense`;
-
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      res.header("Content-Type", "text/csv");
-      res.attachment("dispense-report.csv");
-      return res.send(cached);
-    }
-
-    const data = await Dispense.find()
-      .populate("patient", "hospitalId firstName lastName")
-      .lean();
-
-    // Supports items array
-    const rows = data.flatMap((d) =>
-      (d.items || []).map((item) => ({
-        hospitalId: d.patient?.hospitalId,
-        patient: `${d.patient?.firstName || ""} ${d.patient?.lastName || ""}`,
-        medication: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        date: d.createdAt?.toISOString().slice(0, 10),
-      }))
-    );
-
-    await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
-
-    sendCSV(res, rows, "dispense-report.csv");
-
-  } catch (err) {
-    next(err);
-  }
-};
-
 
 // PRESCRIPTION EXPORT
 
 const exportPrescriptionsCSV = async (req, res, next) => {
   try {
     const cacheKey = `csv:prescriptions`;
-
     const cached = await redis.get(cacheKey);
+
     if (cached) {
       return sendCSV(res, JSON.parse(cached), "prescriptions-report.csv");
     }
 
-    const data = await Prescription.find()
-      .populate("patient", "hospitalId firstName lastName")
+    const data = await Prescription.find({ isDeleted: false })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "hospitalId firstName lastName",
+        },
+      })
       .lean();
 
-    const rows = data.map((p) => ({
-      hospitalId: p.patient?.hospitalId,
-      patient: `${p.patient?.firstName || ""} ${p.patient?.lastName || ""}`,
-      drug: p.drug,
-      dosage: p.dosage,
-      frequency: p.frequency,
-      date: p.createdAt?.toISOString().slice(0, 10),
-    }));
+    const rows = data.flatMap((p) =>
+      (p.medications || []).map((med) => ({
+        hospitalId: p.visit?.patient?.hospitalId || "",
+        patient: `${p.visit?.patient?.firstName || ""} ${p.visit?.patient?.lastName || ""}`,
+        medication: med.name,
+        dosage: med.dosage,
+        frequency: med.frequency,
+        duration: med.duration,
+        date: p.createdAt?.toISOString().slice(0, 10),
+      }))
+    );
 
     await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
 
     sendCSV(res, rows, "prescriptions-report.csv");
-
   } catch (err) {
     next(err);
   }
@@ -170,8 +134,8 @@ const exportPrescriptionsCSV = async (req, res, next) => {
 const exportLabsCSV = async (req, res, next) => {
   try {
     const cacheKey = `csv:labs`;
-
     const cached = await redis.get(cacheKey);
+
     if (cached) {
       return sendCSV(res, JSON.parse(cached), "labs-report.csv");
     }
@@ -181,7 +145,7 @@ const exportLabsCSV = async (req, res, next) => {
       .lean();
 
     const rows = data.map((l) => ({
-      hospitalId: l.patient?.hospitalId,
+      hospitalId: l.patient?.hospitalId || "",
       patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
       test: l.testName,
       result: l.result,
@@ -192,7 +156,6 @@ const exportLabsCSV = async (req, res, next) => {
     await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
 
     sendCSV(res, rows, "labs-report.csv");
-
   } catch (err) {
     next(err);
   }
@@ -203,10 +166,14 @@ const exportLabsCSV = async (req, res, next) => {
 const exportMedicalRecordsCSV = async (req, res, next) => {
   try {
     const cacheKey = `csv:medical`;
-
     const cached = await redis.get(cacheKey);
+
     if (cached) {
-      return sendCSV(res, JSON.parse(cached), "medical-records-report.csv");
+      return sendCSV(
+        res,
+        JSON.parse(cached),
+        "medical-records-report.csv"
+      );
     }
 
     const data = await MedicalRecord.find()
@@ -214,7 +181,7 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
       .lean();
 
     const rows = data.map((r) => ({
-      hospitalId: r.patient?.hospitalId,
+      hospitalId: r.patient?.hospitalId || "",
       patient: `${r.patient?.firstName || ""} ${r.patient?.lastName || ""}`,
       diagnosis: r.diagnosis,
       notes: r.notes,
@@ -225,7 +192,52 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
     await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
 
     sendCSV(res, rows, "medical-records-report.csv");
+  } catch (err) {
+    next(err);
+  }
+};
 
+// DISPENSE EXPORT
+
+const exportDispenseCSV = async (req, res, next) => {
+  try {
+    const cacheKey = `csv:dispense`;
+    const cached = await redis.get(cacheKey);
+
+    if (cached) {
+      return sendCSV(res, JSON.parse(cached), "dispense-report.csv");
+    }
+
+    const data = await Dispense.find({ isDeleted: false })
+      .populate({
+        path: "prescription",
+        populate: {
+          path: "visit",
+          populate: {
+            path: "patient",
+            select: "hospitalId firstName lastName",
+          },
+        },
+      })
+      .lean();
+
+    const rows = data.flatMap((d) =>
+      (d.items || []).map((item) => ({
+        hospitalId:
+          d.prescription?.visit?.patient?.hospitalId || "",
+        patient: `${
+          d.prescription?.visit?.patient?.firstName || ""
+        } ${d.prescription?.visit?.patient?.lastName || ""}`,
+        medication: item.name,
+        quantityDispensed: item.quantity,
+        dispensedBy: d.dispensedBy || "",
+        date: d.createdAt?.toISOString().slice(0, 10),
+      }))
+    );
+
+    await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
+
+    sendCSV(res, rows, "dispense-report.csv");
   } catch (err) {
     next(err);
   }
