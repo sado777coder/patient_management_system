@@ -214,6 +214,7 @@ const exportDispenseCSV = async (req, res, next) => {
       .populate("dispensedBy", "firstName lastName")
       .populate("items.medication") // we'll access fields safely
       .lean();
+      console.log(JSON.stringify(data, null, 2));
 
     const rows = data.flatMap((dispense) =>
       (dispense.items || []).map((item) => ({
