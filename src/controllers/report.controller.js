@@ -5,6 +5,7 @@ const Prescription = require("../models/Prescription");
 const Lab = require("../models/LabResult");
 const MedicalRecord = require("../models/MedicalRecord");
 const redis = require("../config/redis");
+const MedicationStock = require("../models/MedicationStock");
 
 // SHARED CSV HELPER
 
