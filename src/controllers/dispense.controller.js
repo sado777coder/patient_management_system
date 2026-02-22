@@ -9,15 +9,15 @@ const createDispense = async (req, res, next) => {
 
     // calculate total manually
     const processedItems = items.map((item) => {
-      const amount = item.price * item.quantity;
-      total += amount;
+  const amount = item.price * item.quantity;
+  total += amount;
 
-      return {
-        name: item.name, // medication name
-        quantity: item.quantity,
-        price: amount, // final line price
-      };
-    });
+  return {
+    medication: item.medication,
+    quantity: item.quantity,
+    price: item.price, // unit price
+  };
+});
 
     // create dispense record
     const dispense = await DispenseModel.create({
