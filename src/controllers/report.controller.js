@@ -208,30 +208,32 @@ const exportDispenseCSV = async (req, res, next) => {
       return sendCSV(res, JSON.parse(cached), "dispense-report.csv");
     }
 
-    const data = await Dispense.find({ isDeleted: false })
-      .populate({
-        path: "prescription",
-        populate: {
-          path: "visit",
-          populate: {
-            path: "patient",
-            select: "hospitalId firstName lastName",
-          },
-        },
-      })
+    const data = await Dispense.find()
+      .populate("patient", "hospitalId firstName lastName")
+      .populate("dispensedBy", "firstName lastName")
+      .populate("items.medication") // we'll access fields safely
       .lean();
 
-    const rows = data.flatMap((d) =>
-      (d.items || []).map((item) => ({
-        hospitalId:
-          d.prescription?.visit?.patient?.hospitalId || "",
-        patient: `${
-          d.prescription?.visit?.patient?.firstName || ""
-        } ${d.prescription?.visit?.patient?.lastName || ""}`,
-        medication: item.name,
-        quantityDispensed: item.quantity,
-        dispensedBy: d.dispensedBy || "",
-        date: d.createdAt?.toISOString().slice(0, 10),
+    const rows = data.flatMap((dispense) =>
+      (dispense.items || []).map((item) => ({
+        hospitalId: dispense.patient?.hospitalId || "",
+        patient: `${dispense.patient?.firstName || ""} ${dispense.patient?.lastName || ""}`,
+
+        // Adjust this if MedicationStock uses drugName instead of name
+        medication:
+          item.medication?.name ||
+          item.medication?.drugName ||
+          "",
+
+        quantity: item.quantity || 0,
+        unitPrice: item.price || 0,
+        totalAmount: dispense.totalAmount || 0,
+
+        dispensedBy: `${dispense.dispensedBy?.firstName || ""} ${dispense.dispensedBy?.lastName || ""}`,
+
+        date: dispense.createdAt
+          ? dispense.createdAt.toISOString().slice(0, 10)
+          : "",
       }))
     );
 
