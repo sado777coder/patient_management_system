@@ -12,61 +12,57 @@ const redis = require("../config/redis");
 const generateCSVReport = async ({
   req,
   res,
-  next,       // <-- include next
   cacheKey,
   filename,
   fields,
   queryBuilder,
   mapFn,
 }) => {
-  try {
-    const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
-    const cached = await redis.get(fullCacheKey);
+  const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
+  const cached = await redis.get(fullCacheKey);
 
-    if (cached) {
-      res.header("Content-Type", "text/csv");
-      res.attachment(filename);
-      return res.send(cached);
-    }
-
-    const query = queryBuilder(req);
-    const cursor = query.cursor();
-
-    const rows = [];
-    for await (const doc of cursor) {
-      const mapped = mapFn(doc);
-      if (Array.isArray(mapped)) {
-        rows.push(...mapped);
-      } else {
-        rows.push(mapped);
-      }
-    }
-
-    if (!rows.length) rows.push({ message: "No data" });
-
-    const parser = new Parser({ fields });
-    const csv = parser.parse(rows);
-
-    // store CSV in Redis (string)
-    await redis.set(fullCacheKey, csv, "EX", 600);
-
+  if (cached) {
     res.header("Content-Type", "text/csv");
     res.attachment(filename);
-    res.send(csv);
-  } catch (err) {
-    next(err); // now works correctly
+    return res.send(cached);
   }
+
+  const query = queryBuilder(req);
+  const cursor = query.cursor();
+
+  const rows = [];
+  for await (const doc of cursor) {
+    const mapped = mapFn(doc);
+    if (Array.isArray(mapped)) rows.push(...mapped);
+    else rows.push(mapped);
+  }
+
+  if (!rows.length) rows.push({ message: "No data" });
+
+  const parser = new Parser({ fields });
+  const csv = parser.parse(rows);
+
+  await redis.set(fullCacheKey, csv, "EX", 600);
+
+  res.header("Content-Type", "text/csv");
+  res.attachment(filename);
+  res.send(csv);
+};
+
+// ==============================
+// WRAPPER TO CATCH ERRORS
+// ==============================
+const asyncCSVHandler = (fn) => (req, res, next) => {
+  fn(req, res).catch(next);
 };
 
 // ==============================
 // CSV EXPORT FUNCTIONS
 // ==============================
-
-const exportPatientsCSV = (req, res, next) =>
+const exportPatientsCSV = asyncCSVHandler((req, res) =>
   generateCSVReport({
     req,
     res,
-    next,
     cacheKey: "csv:patients",
     filename: "patients-report.csv",
     fields: [
@@ -113,92 +109,14 @@ const exportPatientsCSV = (req, res, next) =>
       unitCode: p.unit?.code || "",
       createdAt: p.createdAt?.toISOString().slice(0, 10),
     }),
-  });
+  })
+);
 
-const exportPrescriptionsCSV = (req, res, next) =>
+// Similarly wrap the rest
+const exportDispenseCSV = asyncCSVHandler((req, res) =>
   generateCSVReport({
     req,
     res,
-    next,
-    cacheKey: "csv:prescriptions",
-    filename: "prescriptions-report.csv",
-    fields: [
-      "hospitalId",
-      "patient",
-      "medication",
-      "dosage",
-      "frequency",
-      "duration",
-      "date",
-    ],
-    queryBuilder: () =>
-      Prescription.find({ isDeleted: false })
-        .populate({
-          path: "visit",
-          populate: { path: "patient", select: "hospitalId firstName lastName" },
-        })
-        .lean(),
-    mapFn: (p) =>
-      (p.medications || []).map((med) => ({
-        hospitalId: p.visit?.patient?.hospitalId || "",
-        patient: `${p.visit?.patient?.firstName || ""} ${p.visit?.patient?.lastName || ""}`,
-        medication: med.name,
-        dosage: med.dosage,
-        frequency: med.frequency,
-        duration: med.duration,
-        date: p.createdAt?.toISOString().slice(0, 10),
-      })),
-  });
-
-const exportLabsCSV = (req, res, next) =>
-  generateCSVReport({
-    req,
-    res,
-    next,
-    cacheKey: "csv:labs",
-    filename: "labs-report.csv",
-    fields: ["hospitalId", "patient", "test", "result", "status", "date"],
-    queryBuilder: () =>
-      Lab.find({ isDeleted: false })
-        .populate("patient", "hospitalId firstName lastName")
-        .lean(),
-    mapFn: (l) => ({
-      hospitalId: l.patient?.hospitalId || "",
-      patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
-      test: l.testName,
-      result: l.result,
-      status: l.status,
-      date: l.createdAt?.toISOString().slice(0, 10),
-    }),
-  });
-
-const exportMedicalRecordsCSV = (req, res, next) =>
-  generateCSVReport({
-    req,
-    res,
-    next,
-    cacheKey: "csv:medical",
-    filename: "medical-records-report.csv",
-    fields: ["hospitalId", "patient", "diagnosis", "notes", "doctor", "date"],
-    queryBuilder: () =>
-      MedicalRecord.find({ isDeleted: false })
-        .populate("patient", "hospitalId firstName lastName")
-        .lean(),
-    mapFn: (r) => ({
-      hospitalId: r.patient?.hospitalId || "",
-      patient: `${r.patient?.firstName || ""} ${r.patient?.lastName || ""}`,
-      diagnosis: r.diagnosis,
-      notes: r.notes,
-      doctor: r.doctor,
-      date: r.createdAt?.toISOString().slice(0, 10),
-    }),
-  });
-
-const exportDispenseCSV = (req, res, next) =>
-  generateCSVReport({
-    req,
-    res,
-    next,
     cacheKey: "csv:dispense",
     filename: "dispense-report.csv",
     fields: [
@@ -228,12 +146,93 @@ const exportDispenseCSV = (req, res, next) =>
         dispensedBy: `${dispense.dispensedBy?.firstName || ""} ${dispense.dispensedBy?.lastName || ""}`,
         date: dispense.createdAt?.toISOString().slice(0, 10) || "",
       })),
-  });
+  })
+);
+
+// Wrap the others similarly
+const exportPrescriptionsCSV = asyncCSVHandler((req, res) =>
+  generateCSVReport({
+    req,
+    res,
+    cacheKey: "csv:prescriptions",
+    filename: "prescriptions-report.csv",
+    fields: [
+      "hospitalId",
+      "patient",
+      "medication",
+      "dosage",
+      "frequency",
+      "duration",
+      "date",
+    ],
+    queryBuilder: () =>
+      Prescription.find({ isDeleted: false })
+        .populate({
+          path: "visit",
+          populate: { path: "patient", select: "hospitalId firstName lastName" },
+        })
+        .lean(),
+    mapFn: (p) =>
+      (p.medications || []).map((med) => ({
+        hospitalId: p.visit?.patient?.hospitalId || "",
+        patient: `${p.visit?.patient?.firstName || ""} ${p.visit?.patient?.lastName || ""}`,
+        medication: med.name,
+        dosage: med.dosage,
+        frequency: med.frequency,
+        duration: med.duration,
+        date: p.createdAt?.toISOString().slice(0, 10),
+      })),
+  })
+);
+
+const exportLabsCSV = asyncCSVHandler((req, res) =>
+  generateCSVReport({
+    req,
+    res,
+    cacheKey: "csv:labs",
+    filename: "labs-report.csv",
+    fields: ["hospitalId", "patient", "test", "result", "status", "date"],
+    queryBuilder: () =>
+      Lab.find({ isDeleted: false })
+        .populate("patient", "hospitalId firstName lastName")
+        .lean(),
+    mapFn: (l) => ({
+      hospitalId: l.patient?.hospitalId || "",
+      patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
+      test: l.testName,
+      result: l.result,
+      status: l.status,
+      date: l.createdAt?.toISOString().slice(0, 10),
+    }),
+  })
+);
+
+const exportMedicalRecordsCSV = asyncCSVHandler((req, res) =>
+  generateCSVReport({
+    req,
+    res,
+    cacheKey: "csv:medical",
+    filename: "medical-records-report.csv",
+    fields: ["hospitalId", "patient", "diagnosis", "notes", "doctor", "date"],
+    queryBuilder: () =>
+      MedicalRecord.find({ isDeleted: false })
+        .populate("patient", "hospitalId firstName lastName")
+        .lean(),
+    mapFn: (r) => ({
+      hospitalId: r.patient?.hospitalId || "",
+      patient: `${r.patient?.firstName || ""} ${r.patient?.lastName || ""}`,
+      diagnosis: r.diagnosis,
+      notes: r.notes,
+      doctor: r.doctor,
+      date: r.createdAt?.toISOString().slice(0, 10),
+    }),
+  })
+);
 
 module.exports = {
   exportPatientsCSV,
+  exportDispenseCSV,
   exportPrescriptionsCSV,
   exportLabsCSV,
   exportMedicalRecordsCSV,
-  exportDispenseCSV,
 };
