@@ -11,10 +11,7 @@ const {
   exportMedicalRecordsCSV,
 } = require("../controllers/report.controller");
 
-// All routes require authentication
 router.use(requireAuth);
-
-// --- CSV Export Routes ---
 
 // Patients CSV
 router.get(
