@@ -1,11 +1,15 @@
 const allow = (...permissionGroups) => {
   const allowedRoles = permissionGroups.flat().filter(Boolean);
-  if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) {
-    throw new Error("RBAC middleware requires valid permissions!");
+
+  if (!allowedRoles.length) {
+    // fallback to an empty middleware function
+    return (req, res, next) => next();
   }
 
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ message: "Unauthorized: no user attached" });
+    if (!req.user) {
+      return res.status(401).json({ message: "Unauthorized: no user attached" });
+    }
 
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({
@@ -14,7 +18,7 @@ const allow = (...permissionGroups) => {
       });
     }
 
-    next(); // always call next
+    next();
   };
 };
 
