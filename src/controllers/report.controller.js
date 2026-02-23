@@ -67,25 +67,26 @@ const exportPatientsCSV = async (req, res, next) => {
       req,
       cacheKey: "csv:patients",
       filename: "patients-report.csv",
-      queryBuilder: () =>
-        Patient.find({ isDeleted: false })
-          .populate("unit", "name code")
-          .lean(),
+      queryBuilder: async () => {
+        try {
+          const result = await Patient.find({ isDeleted: false })
+            .populate("unit", "name code")
+            .lean();
+          return result;
+        } catch (e) {
+          console.error("PATIENT QUERY ERROR:", e);
+          throw e;
+        }
+      },
       mapFn: (p) => ({
         hospitalId: p.hospitalId,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        phone: p.phone,
-        gender: p.gender,
-        unit: p.unit?.name || "",
-        unitCode: p.unit?.code || "",
-        createdAt: p.createdAt?.toISOString().slice(0, 10),
       }),
     });
 
     sendCSV(res, csv, "patients-report.csv");
   } catch (err) {
-    next(err);
+    console.error("CONTROLLER ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 };
 
