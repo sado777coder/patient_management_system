@@ -1,5 +1,5 @@
 const allow = (...permissionGroups) => {
-  const allowedRoles = permissionGroups.flat();
+  const allowedRoles = permissionGroups.flat().filter(Boolean); // remove undefined/null
 
   return (req, res, next) => {
     if (!req.user) {
@@ -13,7 +13,7 @@ const allow = (...permissionGroups) => {
       });
     }
 
-    next();
+    next(); // always call next
   };
 };
 
