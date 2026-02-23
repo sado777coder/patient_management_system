@@ -9,12 +9,7 @@ const redis = require("../config/redis");
 /**
  * SAFE SHARED CSV GENERATOR
  */
-const generateCSVReport = async ({
-  req,
-  cacheKey,
-  queryBuilder,
-  mapFn,
-}) => {
+const generateCSVReport = async ({ req, cacheKey, queryBuilder, mapFn }) => {
   const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
 
   // 🔹 Check cache
@@ -34,10 +29,7 @@ const generateCSVReport = async ({
 
   if (!rows.length) rows.push({ message: "No data" });
 
-  const parser = new Parser({
-    fields: Object.keys(rows[0]),
-  });
-
+  const parser = new Parser({ fields: Object.keys(rows[0]) });
   const csv = parser.parse(rows);
 
   // 🔹 Cache CSV
@@ -58,7 +50,7 @@ const sendCSV = (res, csv, filename) => {
 /**
  * PATIENTS CSV
  */
-const exportPatientsCSV = async (req, res) => {
+const exportPatientsCSV = async (req, res, next) => {
   const csv = await generateCSVReport({
     req,
     cacheKey: "csv:patients",
@@ -68,6 +60,8 @@ const exportPatientsCSV = async (req, res) => {
         .lean(),
     mapFn: (p) => ({
       hospitalId: p.hospitalId,
+      patientName: `${p.firstName || ""} ${p.lastName || ""}`,
+      unit: p.unit?.name || "",
     }),
   });
 
@@ -77,7 +71,7 @@ const exportPatientsCSV = async (req, res) => {
 /**
  * DISPENSE CSV
  */
-const exportDispenseCSV = async (req, res) => {
+const exportDispenseCSV = async (req, res, next) => {
   const csv = await generateCSVReport({
     req,
     cacheKey: "csv:dispense",
@@ -91,17 +85,12 @@ const exportDispenseCSV = async (req, res) => {
       (dispense.items || []).map((item) => ({
         hospitalId: dispense.patient?.hospitalId || "",
         patient: `${dispense.patient?.firstName || ""} ${dispense.patient?.lastName || ""}`,
-        medication:
-          item.medication?.name ||
-          item.medication?.drugName ||
-          "",
+        medication: item.medication?.name || item.medication?.drugName || "",
         quantity: item.quantity || 0,
         unitPrice: item.price || 0,
         totalAmount: dispense.totalAmount || 0,
         dispensedBy: `${dispense.dispensedBy?.firstName || ""} ${dispense.dispensedBy?.lastName || ""}`,
-        date: dispense.createdAt
-          ? dispense.createdAt.toISOString().slice(0, 10)
-          : "",
+        date: dispense.createdAt?.toISOString().slice(0, 10) || "",
       })),
   });
 
@@ -111,7 +100,7 @@ const exportDispenseCSV = async (req, res) => {
 /**
  * PRESCRIPTIONS CSV
  */
-const exportPrescriptionsCSV = async (req, res) => {
+const exportPrescriptionsCSV = async (req, res, next) => {
   const csv = await generateCSVReport({
     req,
     cacheKey: "csv:prescriptions",
@@ -119,10 +108,7 @@ const exportPrescriptionsCSV = async (req, res) => {
       Prescription.find({ isDeleted: false })
         .populate({
           path: "visit",
-          populate: {
-            path: "patient",
-            select: "hospitalId firstName lastName",
-          },
+          populate: { path: "patient", select: "hospitalId firstName lastName" },
         })
         .lean(),
     mapFn: (p) =>
@@ -133,7 +119,7 @@ const exportPrescriptionsCSV = async (req, res) => {
         dosage: med.dosage,
         frequency: med.frequency,
         duration: med.duration,
-        date: p.createdAt?.toISOString().slice(0, 10),
+        date: p.createdAt?.toISOString().slice(0, 10) || "",
       })),
   });
 
@@ -143,7 +129,7 @@ const exportPrescriptionsCSV = async (req, res) => {
 /**
  * LABS CSV
  */
-const exportLabsCSV = async (req, res) => {
+const exportLabsCSV = async (req, res, next) => {
   const csv = await generateCSVReport({
     req,
     cacheKey: "csv:labs",
@@ -157,7 +143,7 @@ const exportLabsCSV = async (req, res) => {
       test: l.testName,
       result: l.result,
       status: l.status,
-      date: l.createdAt?.toISOString().slice(0, 10),
+      date: l.createdAt?.toISOString().slice(0, 10) || "",
     }),
   });
 
@@ -167,7 +153,7 @@ const exportLabsCSV = async (req, res) => {
 /**
  * MEDICAL RECORDS CSV
  */
-const exportMedicalRecordsCSV = async (req, res) => {
+const exportMedicalRecordsCSV = async (req, res, next) => {
   const csv = await generateCSVReport({
     req,
     cacheKey: "csv:medical",
@@ -181,7 +167,7 @@ const exportMedicalRecordsCSV = async (req, res) => {
       diagnosis: r.diagnosis,
       notes: r.notes,
       doctor: r.doctor,
-      date: r.createdAt?.toISOString().slice(0, 10),
+      date: r.createdAt?.toISOString().slice(0, 10) || "",
     }),
   });
 
