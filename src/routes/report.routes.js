@@ -15,12 +15,6 @@ router.use(requireAuth);
 
 // CSV Export Routes
 router.get(
-  "/patients/csv",
-  allowRoles(permissions.REGISTER_PATIENT, permissions.MANAGE_USERS),
-  exportPatientsCSV
-);
-
-router.get(
   "/dispense/csv",
   allowRoles(permissions.DISPENSE, permissions.MANAGE_USERS),
   exportDispenseCSV
@@ -40,7 +34,7 @@ router.get(
 
 router.get(
   "/records/csv",
-  allowRoles(permissions.VIEW_ALL_RECORDS),
+  allowRoles(permissions.VIEW_ALL_RECORDS, permissions.MANAGE_USERS),
   exportMedicalRecordsCSV
 );
 
