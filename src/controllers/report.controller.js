@@ -6,19 +6,12 @@ const Lab = require("../models/LabResult");
 const MedicalRecord = require("../models/MedicalRecord");
 const redis = require("../config/redis");
 
-/**
- * SAFE SHARED CSV GENERATOR
- */
 const generateCSVReport = async ({ req, cacheKey, queryBuilder, mapFn }) => {
   const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
-
-  // 🔹 Check cache
   const cached = await redis.get(fullCacheKey);
   if (cached) return cached;
 
-  // 🔹 Fetch data
   const docs = await queryBuilder(req);
-
   let rows = [];
 
   for (const doc of docs) {
@@ -32,24 +25,17 @@ const generateCSVReport = async ({ req, cacheKey, queryBuilder, mapFn }) => {
   const parser = new Parser({ fields: Object.keys(rows[0]) });
   const csv = parser.parse(rows);
 
-  // 🔹 Cache CSV
   await redis.set(fullCacheKey, csv, "EX", 600);
-
   return csv;
 };
 
-/**
- * SEND CSV HELPER
- */
 const sendCSV = (res, csv, filename) => {
   res.header("Content-Type", "text/csv");
   res.attachment(filename);
   res.send(csv);
 };
 
-/**
- * PATIENTS CSV
- */
+// --- Patients CSV ---
 const exportPatientsCSV = async (req, res, next) => {
   try {
     const csv = await generateCSVReport({
@@ -65,16 +51,13 @@ const exportPatientsCSV = async (req, res, next) => {
         unit: p.unit?.name || "",
       }),
     });
-
     sendCSV(res, csv, "patients-report.csv");
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * DISPENSE CSV
- */
+// --- Dispense CSV ---
 const exportDispenseCSV = async (req, res, next) => {
   try {
     const csv = await generateCSVReport({
@@ -98,16 +81,13 @@ const exportDispenseCSV = async (req, res, next) => {
           date: dispense.createdAt?.toISOString().slice(0, 10) || "",
         })),
     });
-
     sendCSV(res, csv, "dispense-report.csv");
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * PRESCRIPTIONS CSV
- */
+// --- Prescriptions CSV ---
 const exportPrescriptionsCSV = async (req, res, next) => {
   try {
     const csv = await generateCSVReport({
@@ -131,16 +111,13 @@ const exportPrescriptionsCSV = async (req, res, next) => {
           date: p.createdAt?.toISOString().slice(0, 10) || "",
         })),
     });
-
     sendCSV(res, csv, "prescriptions-report.csv");
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * LABS CSV
- */
+// --- Labs CSV ---
 const exportLabsCSV = async (req, res, next) => {
   try {
     const csv = await generateCSVReport({
@@ -159,16 +136,13 @@ const exportLabsCSV = async (req, res, next) => {
         date: l.createdAt?.toISOString().slice(0, 10) || "",
       }),
     });
-
     sendCSV(res, csv, "labs-report.csv");
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * MEDICAL RECORDS CSV
- */
+// --- Medical Records CSV ---
 const exportMedicalRecordsCSV = async (req, res, next) => {
   try {
     const csv = await generateCSVReport({
@@ -187,7 +161,6 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
         date: r.createdAt?.toISOString().slice(0, 10) || "",
       }),
     });
-
     sendCSV(res, csv, "medical-records-report.csv");
   } catch (err) {
     next(err);
