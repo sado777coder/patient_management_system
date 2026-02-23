@@ -2,14 +2,15 @@ const router = require("express").Router();
 
 const requireAuth = require("../middlewares/requireAuth");
 const validate = require("../middlewares/validate");
-const permissions = require("../middlewares/permissions");
 const allowRoles = require("../middlewares/rbac");
+const permissions = require("../middlewares/permissions");
 
 const {
-  createStock,
-  getStocks,
-  updateStock,
-  deleteStock,
+    createMedication,
+    getAllMedications,
+    getMedicationById,
+    updateMedication,
+    deleteMedication
 } = require("../controllers/medicationStock.controller");
 
 const {
@@ -17,26 +18,38 @@ const {
   updateMedicationStockValidator,
 } = require("../validators/medicationStock.validator");
 
+// Require authentication for all medication routes
 router.use(requireAuth);
 
-console.log("STOCK ROUTE LOADED | Allowed roles:", permissions.DISPENSE);
+console.log("MEDICATION STOCK ROUTE LOADED | Allowed roles:", permissions.DISPENSE);
 
+// Create a new medication
 router.post(
   "/",
   allowRoles(permissions.DISPENSE),
   validate(createMedicationStockValidator),
-  createStock
+  createMedication
 );
 
-router.get("/", getStocks);
+// Get all medications
+router.get("/", getAllMedications);
 
+// Get a single medication by ID
+router.get("/:id", getMedicationById);
+
+// Update a medication
 router.put(
   "/:id",
   allowRoles(permissions.DISPENSE),
   validate(updateMedicationStockValidator),
-  updateStock
+  updateMedication
 );
 
-router.delete("/:id", allowRoles(permissions.DISPENSE), deleteStock);
+// Delete a medication
+router.delete(
+  "/:id",
+  allowRoles(permissions.DISPENSE),
+  deleteMedication
+);
 
 module.exports = router;

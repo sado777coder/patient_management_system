@@ -31,6 +31,7 @@ const insuranceRoute = require("./routes/insurance.routes");
 const paymentRoute = require("./routes/payment.routes");
 const analytics = require("./routes/analytics.routes");
 const diagnosisRoute = require("./routes/diagnoses.routes");
+const medicationRoutes = require("./routes/medicationStock.routes");
 const labOrderRoute = require("./routes/labOrders.routes");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
 
@@ -110,6 +111,7 @@ app.use("/api/audit", auditRoute);
 app.use("/api/prescriptions", prescriptionRoute);
 app.use("/api/records", medicalRecordRoute);
 app.use("/api/maternity", maternityRoute);
+app.use("/medications", medicationRoutes);
 app.use("/api/dispenses", dispenseRoute);
 app.use("/api/triage", triageRoute);
 app.use("/api/beds", bedRoute);

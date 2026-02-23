@@ -11,7 +11,17 @@ const createMedicationStockValidator = Joi.object({
   supplier: Joi.string().optional(),
 });
 
-const updateMedicationStockValidator = createMedicationStockValidator.min(1);
+// Update → all optional but at least one required
+const updateMedicationStockValidator = Joi.object({
+  name: Joi.string().optional(),
+  batchNumber: Joi.string().optional(),
+
+  quantity: Joi.number().min(0).optional(),
+  unitPrice: Joi.number().min(0).optional(),
+
+  expiryDate: Joi.date().optional(),
+  supplier: Joi.string().optional(),
+}).min(1);
 
 module.exports = {
   createMedicationStockValidator,
