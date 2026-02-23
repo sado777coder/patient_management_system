@@ -28,19 +28,19 @@ router.get(
 
 router.get(
   "/prescriptions/csv",
-  allowRoles(permissions.DOCTOR, permissions.MANAGE_USERS),
+  allowRoles(permissions.PRESCRIBE, permissions.MANAGE_USERS),
   exportPrescriptionsCSV
 );
 
 router.get(
   "/labs/csv",
-  allowRoles(permissions.LAB, permissions.MANAGE_USERS),
+  allowRoles(permissions.LAB_RESULT, permissions.MANAGE_USERS),
   exportLabsCSV
 );
 
 router.get(
   "/records/csv",
-  allowRoles(permissions.DOCTOR, permissions.MANAGE_USERS),
+  allowRoles(permissions.VIEW_ALL_RECORDS),
   exportMedicalRecordsCSV
 );
 
