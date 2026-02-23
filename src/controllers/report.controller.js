@@ -6,14 +6,13 @@ const Lab = require("../models/LabResult");
 const MedicalRecord = require("../models/MedicalRecord");
 const redis = require("../config/redis");
 
-
 // ==============================
 // SHARED CSV STREAM GENERATOR
 // ==============================
-
 const generateCSVReport = async ({
   req,
   res,
+  next,       // <-- include next
   cacheKey,
   filename,
   fields,
@@ -24,24 +23,18 @@ const generateCSVReport = async ({
     const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
     const cached = await redis.get(fullCacheKey);
 
-    // ✅ If cached, return immediately
     if (cached) {
       res.header("Content-Type", "text/csv");
       res.attachment(filename);
       return res.send(cached);
     }
 
-    // ✅ Build Mongo query (with filters)
     const query = queryBuilder(req);
-
-    // ✅ Use cursor for streaming (memory safe)
     const cursor = query.cursor();
 
     const rows = [];
-
     for await (const doc of cursor) {
       const mapped = mapFn(doc);
-
       if (Array.isArray(mapped)) {
         rows.push(...mapped);
       } else {
@@ -54,22 +47,26 @@ const generateCSVReport = async ({
     const parser = new Parser({ fields });
     const csv = parser.parse(rows);
 
-    // ✅ Store CSV string only (consistent)
+    // store CSV in Redis (string)
     await redis.set(fullCacheKey, csv, "EX", 600);
 
     res.header("Content-Type", "text/csv");
     res.attachment(filename);
     res.send(csv);
-
   } catch (err) {
-    next(err);
+    next(err); // now works correctly
   }
 };
+
+// ==============================
+// CSV EXPORT FUNCTIONS
+// ==============================
 
 const exportPatientsCSV = (req, res, next) =>
   generateCSVReport({
     req,
     res,
+    next,
     cacheKey: "csv:patients",
     filename: "patients-report.csv",
     fields: [
@@ -84,7 +81,6 @@ const exportPatientsCSV = (req, res, next) =>
     ],
     queryBuilder: (req) => {
       const { from, to, unit, q } = req.query;
-
       const filter = { isDeleted: false };
 
       if (from || to) {
@@ -105,9 +101,7 @@ const exportPatientsCSV = (req, res, next) =>
         ];
       }
 
-      return Patient.find(filter)
-        .populate("unit", "name code")
-        .lean();
+      return Patient.find(filter).populate("unit", "name code").lean();
     },
     mapFn: (p) => ({
       hospitalId: p.hospitalId,
@@ -121,10 +115,11 @@ const exportPatientsCSV = (req, res, next) =>
     }),
   });
 
-  const exportPrescriptionsCSV = (req, res, next) =>
+const exportPrescriptionsCSV = (req, res, next) =>
   generateCSVReport({
     req,
     res,
+    next,
     cacheKey: "csv:prescriptions",
     filename: "prescriptions-report.csv",
     fields: [
@@ -140,10 +135,7 @@ const exportPatientsCSV = (req, res, next) =>
       Prescription.find({ isDeleted: false })
         .populate({
           path: "visit",
-          populate: {
-            path: "patient",
-            select: "hospitalId firstName lastName",
-          },
+          populate: { path: "patient", select: "hospitalId firstName lastName" },
         })
         .lean(),
     mapFn: (p) =>
@@ -158,10 +150,11 @@ const exportPatientsCSV = (req, res, next) =>
       })),
   });
 
-  const exportLabsCSV = (req, res, next) =>
+const exportLabsCSV = (req, res, next) =>
   generateCSVReport({
     req,
     res,
+    next,
     cacheKey: "csv:labs",
     filename: "labs-report.csv",
     fields: ["hospitalId", "patient", "test", "result", "status", "date"],
@@ -179,10 +172,11 @@ const exportPatientsCSV = (req, res, next) =>
     }),
   });
 
-  const exportMedicalRecordsCSV = (req, res, next) =>
+const exportMedicalRecordsCSV = (req, res, next) =>
   generateCSVReport({
     req,
     res,
+    next,
     cacheKey: "csv:medical",
     filename: "medical-records-report.csv",
     fields: ["hospitalId", "patient", "diagnosis", "notes", "doctor", "date"],
@@ -200,10 +194,11 @@ const exportPatientsCSV = (req, res, next) =>
     }),
   });
 
-  const exportDispenseCSV = (req, res, next) =>
+const exportDispenseCSV = (req, res, next) =>
   generateCSVReport({
     req,
     res,
+    next,
     cacheKey: "csv:dispense",
     filename: "dispense-report.csv",
     fields: [
@@ -226,10 +221,7 @@ const exportPatientsCSV = (req, res, next) =>
       (dispense.items || []).map((item) => ({
         hospitalId: dispense.patient?.hospitalId || "",
         patient: `${dispense.patient?.firstName || ""} ${dispense.patient?.lastName || ""}`,
-        medication:
-          item.medication?.name ||
-          item.medication?.drugName ||
-          "",
+        medication: item.medication?.name || item.medication?.drugName || "",
         quantity: item.quantity || 0,
         unitPrice: item.price || 0,
         totalAmount: dispense.totalAmount || 0,
@@ -238,10 +230,10 @@ const exportPatientsCSV = (req, res, next) =>
       })),
   });
 
-  module.exports = {
-    exportPatientsCSV,
-    exportPrescriptionsCSV,
-    exportLabsCSV,
-    exportMedicalRecordsCSV,
-    exportDispenseCSV
-  }
+module.exports = {
+  exportPatientsCSV,
+  exportPrescriptionsCSV,
+  exportLabsCSV,
+  exportMedicalRecordsCSV,
+  exportDispenseCSV,
+};
