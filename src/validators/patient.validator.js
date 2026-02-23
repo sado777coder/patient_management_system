@@ -11,13 +11,13 @@ const createPatientValidator = Joi.object({
     .valid("male", "female", "other")
     .required(),
 
-  dateOfBirth: Joi.date().required(),
+  dateOfBirth: Joi.date().optional(),
 
-  phone: Joi.string().trim().required(),
+  phone: Joi.string().trim().optional(),
   email: Joi.string().email().optional(),
-  address: Joi.string().trim().required(),
+  address: Joi.string().trim().optional(),
 
-  nationality: Joi.string().required(),
+  nationality: Joi.string().allow(null, "").optional(),
 
   maritalStatus: Joi.string().valid(
     "single",
@@ -26,7 +26,7 @@ const createPatientValidator = Joi.object({
     "widow",
     "widower",
     "cohabiting"
-  ).required(),
+  ).allow(null).optional(),
 
   occupation: Joi.string().valid(
     "farmer",
@@ -41,24 +41,24 @@ const createPatientValidator = Joi.object({
     "civil_servant",
     "unemployed",
     "other"
-  ).required(),
+  ).optional(),
 
   bloodGroup: Joi.string().optional(),
   allergies: Joi.array().items(Joi.string()).optional(),
   chronicConditions: Joi.array().items(Joi.string()).optional(),
 
   emergencyContact: Joi.object({
-    name: Joi.string().required(),
-    phone: Joi.string().required(),
-    relation: Joi.string().required(),
-  }).required(),
+    name: Joi.string().optional(),
+    phone: Joi.string().optional(),
+    relation: Joi.string().optional(),
+  }).optional(),
 
   insurance: Joi.object({
     provider: Joi.string().allow(null, ""),
     policyNumber: Joi.string().allow(null, ""),
-    expiryDate: Joi.date(),
+    expiryDate: Joi.date().allow(null),
     isActive: Joi.boolean(),
-  }).required(),
+  }).optional(),
 
   unit: Joi.string().required(),
 });

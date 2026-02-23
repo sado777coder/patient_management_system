@@ -23,4 +23,8 @@ const prescriptionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+prescriptionSchema.index({ visit: 1 });
+prescriptionSchema.index({ isDeleted: 1, createdAt: -1 });
+prescriptionSchema.index({ prescribedBy: 1 });
+
 module.exports = mongoose.model("Prescription", prescriptionSchema);

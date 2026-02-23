@@ -1,42 +1,72 @@
 const DispenseModel = require("../models/Dispense");
 const BillingModel = require("../models/Billing");
+const MedicationStock = require("../models/MedicationStock");
 
+/**
+ * CREATE DISPENSE (With Stock Validation + Billing)
+ */
 const createDispense = async (req, res, next) => {
   try {
-    const { patient, items } = req.body;
+    const { patient, prescription, items } = req.body;
 
-    let total = 0;
+    if (!items || items.length === 0) {
+      return res.status(400).json({ error: "Items are required" });
+    }
 
-    // calculate total manually
-    const processedItems = items.map((item) => {
-  const amount = item.price * item.quantity;
-  total += amount;
+    let totalAmount = 0;
+    const processedItems = [];
 
-  return {
-    medication: item.medication,
-    quantity: item.quantity,
-    price: item.price, // unit price
-  };
-});
+    for (let item of items) {
+      //  Check medication exists
+      const medication = await MedicationStock.findById(item.medication);
 
-    // create dispense record
+      if (!medication) {
+        return res.status(404).json({
+          error: `Medication not found for ID: ${item.medication}`,
+        });
+      }
+
+      // Check stock
+      if (medication.quantity < item.quantity) {
+        return res.status(400).json({
+          error: `Insufficient stock for ${medication.name}`,
+        });
+      }
+
+      // Reduce stock
+      medication.quantity -= item.quantity;
+      await medication.save();
+
+      // Calculate total
+      const amount = item.price * item.quantity;
+      totalAmount += amount;
+
+      processedItems.push({
+        medication: item.medication,
+        quantity: item.quantity,
+        price: item.price,
+      });
+    }
+
+    // Create dispense record
     const dispense = await DispenseModel.create({
       patient,
+      prescription,
       items: processedItems,
-      totalAmount: total,
-      dispensedBy: req.user._id,
+      totalAmount,
+      dispensedBy: req.user?._id,
     });
 
-    // create bill (charge only)
+    // Create billing record
     await BillingModel.create({
       patient,
       items: [
         {
           description: "Medication Dispense",
-          amount: total,
+          amount: totalAmount,
         },
       ],
-      totalAmount: total,
+      totalAmount,
       paymentStatus: "pending",
     });
 
@@ -45,6 +75,7 @@ const createDispense = async (req, res, next) => {
       message: "Medication dispensed. Bill added. Please pay at Revenue.",
       data: dispense,
     });
+
   } catch (err) {
     next(err);
   }
@@ -57,7 +88,9 @@ const createDispense = async (req, res, next) => {
 const getDispenses = async (req, res, next) => {
   try {
     const records = await DispenseModel.find()
-      .populate("patient dispensedBy");
+      .populate("patient")
+      .populate("dispensedBy")
+      .populate("items.medication", "name batchNumber unitPrice");
 
     res.status(200).json({
       success: true,

@@ -18,4 +18,8 @@ const medicalRecordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+medicalRecordSchema.index({ visit: 1 });
+medicalRecordSchema.index({ isDeleted: 1, createdAt: -1 });
+medicalRecordSchema.index({ createdBy: 1 });
+
 module.exports = mongoose.model("MedicalRecord", medicalRecordSchema);
