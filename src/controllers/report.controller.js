@@ -7,20 +7,24 @@ const MedicalRecord = require("../models/MedicalRecord");
 const redis = require("../config/redis");
 
 /**
- * SHARED CSV GENERATOR
+ * SAFE SHARED CSV GENERATOR
  */
 const generateCSVReport = async ({
   req,
   cacheKey,
-  fields,
+  filename,
   queryBuilder,
   mapFn,
 }) => {
   const fullCacheKey = `${cacheKey}:${JSON.stringify(req.query)}`;
+
+  // 🔹 Check cache
   const cached = await redis.get(fullCacheKey);
+  if (cached) {
+    return cached; // already CSV string
+  }
 
-  if (cached) return cached;
-
+  // 🔹 Fetch data safely
   const docs = await queryBuilder(req);
 
   let rows = [];
@@ -33,12 +37,25 @@ const generateCSVReport = async ({
 
   if (!rows.length) rows.push({ message: "No data" });
 
-  const parser = new Parser({ fields });
+  const parser = new Parser({
+    fields: Object.keys(rows[0]),
+  });
+
   const csv = parser.parse(rows);
 
+  // 🔹 Cache CSV string directly
   await redis.set(fullCacheKey, csv, "EX", 600);
 
   return csv;
+};
+
+/**
+ * SEND CSV HELPER
+ */
+const sendCSV = (res, csv, filename) => {
+  res.header("Content-Type", "text/csv");
+  res.attachment(filename);
+  res.send(csv);
 };
 
 /**
@@ -49,16 +66,7 @@ const exportPatientsCSV = async (req, res, next) => {
     const csv = await generateCSVReport({
       req,
       cacheKey: "csv:patients",
-      fields: [
-        "hospitalId",
-        "firstName",
-        "lastName",
-        "phone",
-        "gender",
-        "unit",
-        "unitCode",
-        "createdAt",
-      ],
+      filename: "patients-report.csv",
       queryBuilder: () =>
         Patient.find({ isDeleted: false })
           .populate("unit", "name code")
@@ -75,9 +83,7 @@ const exportPatientsCSV = async (req, res, next) => {
       }),
     });
 
-    res.header("Content-Type", "text/csv");
-    res.attachment("patients-report.csv");
-    res.send(csv);
+    sendCSV(res, csv, "patients-report.csv");
   } catch (err) {
     next(err);
   }
@@ -91,16 +97,7 @@ const exportDispenseCSV = async (req, res, next) => {
     const csv = await generateCSVReport({
       req,
       cacheKey: "csv:dispense",
-      fields: [
-        "hospitalId",
-        "patient",
-        "medication",
-        "quantity",
-        "unitPrice",
-        "totalAmount",
-        "dispensedBy",
-        "date",
-      ],
+      filename: "dispense-report.csv",
       queryBuilder: () =>
         Dispense.find({ isDeleted: false })
           .populate("patient", "hospitalId firstName lastName")
@@ -111,18 +108,21 @@ const exportDispenseCSV = async (req, res, next) => {
         (dispense.items || []).map((item) => ({
           hospitalId: dispense.patient?.hospitalId || "",
           patient: `${dispense.patient?.firstName || ""} ${dispense.patient?.lastName || ""}`,
-          medication: item.medication?.name || item.medication?.drugName || "",
+          medication:
+            item.medication?.name ||
+            item.medication?.drugName ||
+            "",
           quantity: item.quantity || 0,
           unitPrice: item.price || 0,
           totalAmount: dispense.totalAmount || 0,
           dispensedBy: `${dispense.dispensedBy?.firstName || ""} ${dispense.dispensedBy?.lastName || ""}`,
-          date: dispense.createdAt?.toISOString().slice(0, 10),
+          date: dispense.createdAt
+            ? dispense.createdAt.toISOString().slice(0, 10)
+            : "",
         })),
     });
 
-    res.header("Content-Type", "text/csv");
-    res.attachment("dispense-report.csv");
-    res.send(csv);
+    sendCSV(res, csv, "dispense-report.csv");
   } catch (err) {
     next(err);
   }
@@ -136,20 +136,15 @@ const exportPrescriptionsCSV = async (req, res, next) => {
     const csv = await generateCSVReport({
       req,
       cacheKey: "csv:prescriptions",
-      fields: [
-        "hospitalId",
-        "patient",
-        "medication",
-        "dosage",
-        "frequency",
-        "duration",
-        "date",
-      ],
+      filename: "prescriptions-report.csv",
       queryBuilder: () =>
         Prescription.find({ isDeleted: false })
           .populate({
             path: "visit",
-            populate: { path: "patient", select: "hospitalId firstName lastName" },
+            populate: {
+              path: "patient",
+              select: "hospitalId firstName lastName",
+            },
           })
           .lean(),
       mapFn: (p) =>
@@ -164,9 +159,7 @@ const exportPrescriptionsCSV = async (req, res, next) => {
         })),
     });
 
-    res.header("Content-Type", "text/csv");
-    res.attachment("prescriptions-report.csv");
-    res.send(csv);
+    sendCSV(res, csv, "prescriptions-report.csv");
   } catch (err) {
     next(err);
   }
@@ -180,7 +173,7 @@ const exportLabsCSV = async (req, res, next) => {
     const csv = await generateCSVReport({
       req,
       cacheKey: "csv:labs",
-      fields: ["hospitalId", "patient", "test", "result", "status", "date"],
+      filename: "labs-report.csv",
       queryBuilder: () =>
         Lab.find({ isDeleted: false })
           .populate("patient", "hospitalId firstName lastName")
@@ -195,9 +188,7 @@ const exportLabsCSV = async (req, res, next) => {
       }),
     });
 
-    res.header("Content-Type", "text/csv");
-    res.attachment("labs-report.csv");
-    res.send(csv);
+    sendCSV(res, csv, "labs-report.csv");
   } catch (err) {
     next(err);
   }
@@ -211,7 +202,7 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
     const csv = await generateCSVReport({
       req,
       cacheKey: "csv:medical",
-      fields: ["hospitalId", "patient", "diagnosis", "notes", "doctor", "date"],
+      filename: "medical-records-report.csv",
       queryBuilder: () =>
         MedicalRecord.find({ isDeleted: false })
           .populate("patient", "hospitalId firstName lastName")
@@ -226,9 +217,7 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
       }),
     });
 
-    res.header("Content-Type", "text/csv");
-    res.attachment("medical-records-report.csv");
-    res.send(csv);
+    sendCSV(res, csv, "medical-records-report.csv");
   } catch (err) {
     next(err);
   }
