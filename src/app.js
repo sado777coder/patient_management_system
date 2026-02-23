@@ -111,7 +111,7 @@ app.use("/api/audit", auditRoute);
 app.use("/api/prescriptions", prescriptionRoute);
 app.use("/api/records", medicalRecordRoute);
 app.use("/api/maternity", maternityRoute);
-app.use("/medications", medicationRoutes);
+app.use("/api/medications", medicationRoutes);
 app.use("/api/dispenses", dispenseRoute);
 app.use("/api/triage", triageRoute);
 app.use("/api/beds", bedRoute);
