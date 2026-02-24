@@ -26,7 +26,7 @@ const sendCSV = (res, rows, filename) => {
 const exportPatientsCSV = async (req, res, next) => {
   try {
     const cacheKey = `csv:patients:${JSON.stringify(req.query)}`;
-    const cached = await redis.get(cacheKey);
+    const cached = null;
 
     if (cached) {
       return res
@@ -77,7 +77,7 @@ const exportPatientsCSV = async (req, res, next) => {
 
     const csv = parser.parse(rows.length ? rows : [{ message: "No data" }]);
 
-    await redis.set(cacheKey, csv, "EX", 600);
+   // await redis.set(cacheKey, csv, "EX", 600);
 
     res.header("Content-Type", "text/csv");
     res.attachment("patients-report.csv");
