@@ -13,9 +13,6 @@ const {
   exportMedicalRecordsCSV,
 } = require("../controllers/report.controller");
 
-// Generic async handler to forward errors to Express
-const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-
 // 🔹 Require authentication for all routes
 router.use(requireAuth);
 
@@ -23,35 +20,35 @@ router.use(requireAuth);
 router.get(
   "/patients/csv",
   allowRoles(permissions.REGISTER_PATIENT, permissions.MANAGE_USERS),
-  asyncHandler(exportPatientsCSV)
+  exportPatientsCSV
 );
 
 // --- Dispense CSV ---
 router.get(
   "/dispense/csv",
   allowRoles(permissions.DISPENSE, permissions.MANAGE_USERS),
-  asyncHandler(exportDispenseCSV)
+  exportDispenseCSV
 );
 
 // --- Prescriptions CSV ---
 router.get(
   "/prescriptions/csv",
   allowRoles(permissions.PRESCRIBE, permissions.MANAGE_USERS),
-  asyncHandler(exportPrescriptionsCSV)
+  exportPrescriptionsCSV
 );
 
 // --- Labs CSV ---
 router.get(
   "/labs/csv",
   allowRoles(permissions.LAB_RESULT, permissions.MANAGE_USERS),
-  asyncHandler(exportLabsCSV)
+  exportLabsCSV
 );
 
 // --- Medical Records CSV ---
 router.get(
   "/medical-records/csv",
   allowRoles(permissions.VIEW_ALL_RECORDS),
-  asyncHandler(exportMedicalRecordsCSV)
+  exportMedicalRecordsCSV
 );
 
 module.exports = router;
