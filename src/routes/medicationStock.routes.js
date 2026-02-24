@@ -21,8 +21,6 @@ const {
 // Require authentication for all medication routes
 router.use(requireAuth);
 
-console.log("MEDICATION STOCK ROUTE LOADED | Allowed roles:", permissions.DISPENSE);
-
 // Create a new medication
 router.post(
   "/",

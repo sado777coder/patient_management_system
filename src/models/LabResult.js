@@ -2,8 +2,8 @@ const mongoose = require("mongoose");
 
 const labResultSchema = new mongoose.Schema(
   {
-    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
-
+    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit" },
+    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
     testName: String,
     result: String,
     normalRange: String,

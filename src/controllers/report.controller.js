@@ -25,9 +25,12 @@ const sendCSV = (res, rows, filename) => {
 // PATIENT EXPORT
 const exportPatientsCSV = async (req, res, next) => {
   try {
-    const { from, to, unit, q } = req.query;
-    const filter = { isDeleted: false };
+    console.log("Starting exportPatientsCSV...");
 
+    const { from, to, unit, q } = req.query;
+    console.log("Query params:", { from, to, unit, q });
+
+    const filter = { isDeleted: false };
     if (from || to) {
       filter.createdAt = {};
       if (from) filter.createdAt.$gte = new Date(from);
@@ -35,7 +38,6 @@ const exportPatientsCSV = async (req, res, next) => {
     }
 
     if (unit) filter.unit = unit;
-
     if (q) {
       const regex = new RegExp(q, "i");
       filter.$or = [
@@ -46,38 +48,49 @@ const exportPatientsCSV = async (req, res, next) => {
       ];
     }
 
+    console.log("Filter built:", filter);
+
     const patients = await Patient.find(filter)
       .populate("unit", "name code")
       .lean();
 
+    console.log("Patients fetched:", patients.length);
+
     if (!patients.length) {
+      console.log("No patients found, sending fallback CSV");
       return res
         .header("Content-Type", "text/csv")
         .attachment("patients-report.csv")
         .send("message\nNo data");
     }
 
-    const rows = patients.map((p) => ({
-      hospitalId: p.hospitalId || "",
-      firstName: p.firstName || "",
-      lastName: p.lastName || "",
-      phone: p.phone || "",
-      gender: p.gender || "",
-      unit: p.unit?.name || "",
-      unitCode: p.unit?.code || "",
-      createdAt: p.createdAt
-        ? new Date(p.createdAt).toISOString().slice(0, 10)
-        : "",
-    }));
+    const rows = patients.map((p) => {
+      console.log("Mapping patient:", p.hospitalId);
+      return {
+        hospitalId: p.hospitalId || "",
+        firstName: p.firstName || "",
+        lastName: p.lastName || "",
+        phone: p.phone || "",
+        gender: p.gender || "",
+        unit: p.unit?.name || "",
+        unitCode: p.unit?.code || "",
+        createdAt: p.createdAt ? new Date(p.createdAt).toISOString().slice(0, 10) : "",
+      };
+    });
+
+    console.log("Rows mapped:", rows.length);
 
     const parser = new Parser();
     const csv = parser.parse(rows);
+
+    console.log("CSV parsed successfully");
 
     res.header("Content-Type", "text/csv");
     res.attachment("patients-report.csv");
     res.send(csv);
   } catch (err) {
-    console.error("Patients CSV Error:", err);
+    console.error("Caught in catch block:", err);
+    console.error(err.stack);
     return next(err instanceof Error ? err : new Error("CSV generation failed"));
   }
 };
