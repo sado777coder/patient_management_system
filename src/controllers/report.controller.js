@@ -25,16 +25,6 @@ const sendCSV = (res, rows, filename) => {
 // PATIENT EXPORT
 const exportPatientsCSV = async (req, res, next) => {
   try {
-    const cacheKey = `csv:patients:${JSON.stringify(req.query)}`;
-    const cached = null;
-
-    if (cached) {
-      return res
-        .header("Content-Type", "text/csv")
-        .attachment("patients-report.csv")
-        .send(cached);
-    }
-
     const { from, to, unit, q } = req.query;
     const filter = { isDeleted: false };
 
@@ -60,30 +50,35 @@ const exportPatientsCSV = async (req, res, next) => {
       .populate("unit", "name code")
       .lean();
 
+    if (!patients.length) {
+      return res
+        .header("Content-Type", "text/csv")
+        .attachment("patients-report.csv")
+        .send("message\nNo data");
+    }
+
     const rows = patients.map((p) => ({
-      hospitalId: p.hospitalId,
-      firstName: p.firstName,
-      lastName: p.lastName,
-      phone: p.phone,
-      gender: p.gender,
+      hospitalId: p.hospitalId || "",
+      firstName: p.firstName || "",
+      lastName: p.lastName || "",
+      phone: p.phone || "",
+      gender: p.gender || "",
       unit: p.unit?.name || "",
       unitCode: p.unit?.code || "",
-      createdAt: p.createdAt?.toISOString().slice(0, 10),
+      createdAt: p.createdAt
+        ? new Date(p.createdAt).toISOString().slice(0, 10)
+        : "",
     }));
 
-    const parser = new Parser({
-      fields: Object.keys(rows[0] || { message: "" }),
-    });
-
-    const csv = parser.parse(rows.length ? rows : [{ message: "No data" }]);
-
-   // await redis.set(cacheKey, csv, "EX", 600);
+    const parser = new Parser();
+    const csv = parser.parse(rows);
 
     res.header("Content-Type", "text/csv");
     res.attachment("patients-report.csv");
     res.send(csv);
   } catch (err) {
-    next(err);
+    console.error("Patients CSV Error:", err);
+    return next(err instanceof Error ? err : new Error("CSV generation failed"));
   }
 };
 
