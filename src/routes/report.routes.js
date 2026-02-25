@@ -44,7 +44,7 @@ router.get("/medicalRecords/csv",
         exportMedicalRecordsCSV
 );
 
-router.get("/ exportAntenatal/csv",
+router.get("/exportAntenatal/csv",
     allow(permission.MATERNITY,permission.MANAGE_USERS),
         exportAntenatalCSV
 );
@@ -64,7 +64,7 @@ router.get("/exportPostnatal/csv",
      exportPostnatalCSV
 );
 
-router.get("/ exportReferrals/csv",
+router.get("/exportReferrals/csv",
     allow(permission.MATERNITY,permission.MANAGE_USERS),
      exportReferralsCSV
 );
