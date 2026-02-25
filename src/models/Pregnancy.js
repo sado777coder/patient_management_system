@@ -2,10 +2,32 @@ const mongoose = require("mongoose");
 
 const pregnancySchema = new mongoose.Schema(
   {
-    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
+    patient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Patient",
+      required: true,
+      index: true, // helps queries
+    },
 
-    lastMenstrualPeriod: Date,
-    expectedDeliveryDate: Date,
+    gravida: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    para: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    lastMenstrualPeriod: {
+      type: Date,
+    },
+
+    expectedDeliveryDate: {
+      type: Date,
+    },
 
     riskLevel: {
       type: String,
@@ -13,7 +35,15 @@ const pregnancySchema = new mongoose.Schema(
       default: "low",
     },
 
-    notes: String,
+    status: {
+      type: String,
+      enum: ["ongoing", "delivered", "terminated", "referred"],
+      default: "ongoing",
+    },
+
+    notes: {
+      type: String,
+    },
   },
   { timestamps: true }
 );

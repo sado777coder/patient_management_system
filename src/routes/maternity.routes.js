@@ -6,25 +6,32 @@ const permissions = require("../middlewares/permissions");
 const allowRoles = require("../middlewares/rbac");
 
 const {
-  createPregnancy,
-  getPregnancies,
-  createDelivery,
-  getDeliveries,
-} = require("../controllers/maternity.controller");
-
+  createAntenatalVisitValidator,
+} = require("../validators/antenatal.validator");
 const {
   createPregnancyValidator,
 } = require("../validators/pregnancy.validator");
-
 const {
   createDeliveryValidator,
 } = require("../validators/delivery.validator");
 
+const {
+  createPregnancy,
+  getPregnancies,
+  getPregnancyById,
+  createAntenatalVisit,
+  getAntenatalVisits,
+  getAntenatalVisitById,
+  createDelivery,
+  getDeliveries,
+  getDeliveryById,
+  getPregnancySummary
+} = require("../controllers/maternity.controller");
+
 router.use(requireAuth);
 
-/**
- * register pregnancy
- */
+ // register pregnancy
+
 router.post(
   "/pregnancies",
   allowRoles(permissions.MATERNITY),
@@ -32,11 +39,36 @@ router.post(
   createPregnancy
 );
 
-router.get("/pregnancies", getPregnancies);
+router.get("/pregnancies",
+  allowRoles(permissions.MATERNITY),
+   getPregnancies);
 
-/**
- * delivery record
- */
+   router.get("/pregnancies/:id",
+  allowRoles(permissions.MATERNITY),
+   getPregnancyById);
+
+ //ANTENATAL VISITS
+
+router.post(
+  "/antenatal-visits",
+  allowRoles(permissions.MATERNITY),
+  validate(createAntenatalVisitValidator),
+  createAntenatalVisit
+);
+
+router.get(
+  "/antenatal-visits",
+  allowRoles(permissions.MATERNITY),
+  getAntenatalVisits
+);
+
+router.get(
+  "/antenatal-visits/:id",
+  allowRoles(permissions.MATERNITY),
+  getAntenatalVisitById
+)
+
+ //delivery record
 router.post(
   "/deliveries",
   allowRoles(permissions.MATERNITY),
@@ -44,6 +76,18 @@ router.post(
   createDelivery
 );
 
-router.get("/deliveries",allowRoles(permissions.MATERNITY), getDeliveries);
+router.get("/deliveries",
+  allowRoles(permissions.MATERNITY),
+   getDeliveries);
+
+   router.get("/deliveries/:id",
+  allowRoles(permissions.MATERNITY),
+   getDeliveryById);
+
+router.get(
+  "/pregnancies/:id/summary",
+  allowRoles(permissions.MATERNITY),
+  getPregnancySummary
+);
 
 module.exports = router;
