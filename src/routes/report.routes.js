@@ -10,6 +10,11 @@ const {
   exportPrescriptionsCSV,
   exportLabsCSV,
   exportMedicalRecordsCSV,
+  exportAntenatalCSV,
+  exportAbortionsCSV,
+  exportDeliveriesCSV,
+  exportPostnatalCSV,
+  exportReferralsCSV,
 } = require("../controllers/report.controller");
 
 router.use(requireAuth);
@@ -37,6 +42,31 @@ router.get("/labs/csv",
 router.get("/medicalRecords/csv",
     allow(permission.DISPENSE,permission.MANAGE_USERS),
         exportMedicalRecordsCSV
+);
+
+router.get("/ exportAntenatal/csv",
+    allow(permission.MATERNITY,permission.MANAGE_USERS),
+        exportAntenatalCSV
+);
+
+router.get("/exportAbortions/csv",
+    allow(permission.MATERNITY,permission.MANAGE_USERS),
+       exportAbortionsCSV
+);
+
+router.get("/exportDeliveries/csv",
+    allow(permission.MATERNITY,permission.MANAGE_USERS),
+      exportDeliveriesCSV
+);
+
+router.get("/exportPostnatal/csv",
+    allow(permission.MATERNITY,permission.MANAGE_USERS),
+     exportPostnatalCSV
+);
+
+router.get("/ exportReferrals/csv",
+    allow(permission.MATERNITY,permission.MANAGE_USERS),
+     exportReferralsCSV
 );
 
 module.exports = router;
