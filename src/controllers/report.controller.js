@@ -9,16 +9,27 @@ const AntenatalVisit = require("../models/AntenatalVisit");
 const Delivery = require("../models/Delivery");
 const PostnatalVisit = require("../models/PostnatalVisit");
 const Referral = require("../models/Referral");
+const Pregnancy = require("../models/Pregnancy");
 const redis = require("../config/redis");
 
 // SHARED CSV HELPER
 const sendCSV = (res, rows, filename) => {
   if (!rows.length) rows.push({ message: "No data" });
+
   const parser = new Parser({ fields: Object.keys(rows[0]) });
   const csv = parser.parse(rows);
+
   res.header("Content-Type", "text/csv");
   res.attachment(filename);
   res.send(csv);
+};
+
+const getHospitalPregnancyIds = async (hospitalId) => {
+  const pregnancies = await Pregnancy.find({ hospitalId })
+    .select("_id")
+    .lean();
+
+  return pregnancies.map((p) => p._id);
 };
 
 // ---------------------- PATIENTS ----------------------
@@ -167,7 +178,14 @@ const exportDispenseCSV = async (req, res, next) => {
 // ---------------------- ANTENATAL ----------------------
 const exportAntenatalCSV = async (req, res, next) => {
   try {
-    const visits = await AntenatalVisit.find().populate({ path: "pregnancy", populate: "patient" }).lean();
+    const pregnancyIds = await getHospitalPregnancyIds(req.user.hospitalId);
+
+    const visits = await AntenatalVisit.find({
+      pregnancy: { $in: pregnancyIds }
+    })
+      .populate({ path: "pregnancy", populate: "patient" })
+      .lean();
+
     const rows = visits.map((v) => ({
       hospitalId: v.pregnancy?.patient?.hospitalId || "",
       patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
@@ -179,6 +197,7 @@ const exportAntenatalCSV = async (req, res, next) => {
       riskLevel: v.riskLevel || "",
       notes: v.notes || "",
     }));
+
     sendCSV(res, rows, "antenatal-visits-report.csv");
   } catch (err) {
     next(err);
@@ -188,7 +207,14 @@ const exportAntenatalCSV = async (req, res, next) => {
 // ---------------------- ABORTIONS ----------------------
 const exportAbortionsCSV = async (req, res, next) => {
   try {
-    const abortions = await Abortion.find().populate({ path: "pregnancy", populate: "patient" }).lean();
+    const pregnancyIds = await getHospitalPregnancyIds(req.user.hospitalId);
+
+    const abortions = await Abortion.find({
+      pregnancy: { $in: pregnancyIds }
+    })
+      .populate({ path: "pregnancy", populate: "patient" })
+      .lean();
+
     const rows = abortions.map((a) => ({
       hospitalId: a.pregnancy?.patient?.hospitalId || "",
       patient: `${a.pregnancy?.patient?.firstName || ""} ${a.pregnancy?.patient?.lastName || ""}`,
@@ -198,6 +224,7 @@ const exportAbortionsCSV = async (req, res, next) => {
       complications: a.complications || "",
       notes: a.notes || "",
     }));
+
     sendCSV(res, rows, "abortions-report.csv");
   } catch (err) {
     next(err);
@@ -207,7 +234,14 @@ const exportAbortionsCSV = async (req, res, next) => {
 // ---------------------- DELIVERIES ----------------------
 const exportDeliveriesCSV = async (req, res, next) => {
   try {
-    const deliveries = await Delivery.find().populate({ path: "pregnancy", populate: "patient" }).lean();
+    const pregnancyIds = await getHospitalPregnancyIds(req.user.hospitalId);
+
+    const deliveries = await Delivery.find({
+      pregnancy: { $in: pregnancyIds }
+    })
+      .populate({ path: "pregnancy", populate: "patient" })
+      .lean();
+
     const rows = deliveries.map((d) => ({
       hospitalId: d.pregnancy?.patient?.hospitalId || "",
       patient: `${d.pregnancy?.patient?.firstName || ""} ${d.pregnancy?.patient?.lastName || ""}`,
@@ -217,6 +251,7 @@ const exportDeliveriesCSV = async (req, res, next) => {
       babyGender: d.babyGender || "",
       complications: d.complications || "",
     }));
+
     sendCSV(res, rows, "deliveries-report.csv");
   } catch (err) {
     next(err);
@@ -226,7 +261,14 @@ const exportDeliveriesCSV = async (req, res, next) => {
 // ---------------------- POSTNATAL VISITS ----------------------
 const exportPostnatalCSV = async (req, res, next) => {
   try {
-    const visits = await PostnatalVisit.find().populate({ path: "pregnancy", populate: "patient" }).lean();
+    const pregnancyIds = await getHospitalPregnancyIds(req.user.hospitalId);
+
+    const visits = await PostnatalVisit.find({
+      pregnancy: { $in: pregnancyIds }
+    })
+      .populate({ path: "pregnancy", populate: "patient" })
+      .lean();
+
     const rows = visits.map((v) => ({
       hospitalId: v.pregnancy?.patient?.hospitalId || "",
       patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
@@ -237,6 +279,7 @@ const exportPostnatalCSV = async (req, res, next) => {
       complications: v.complications || "",
       notes: v.notes || "",
     }));
+
     sendCSV(res, rows, "postnatal-visits-report.csv");
   } catch (err) {
     next(err);
@@ -246,7 +289,14 @@ const exportPostnatalCSV = async (req, res, next) => {
 // ---------------------- REFERRALS ----------------------
 const exportReferralsCSV = async (req, res, next) => {
   try {
-    const referrals = await Referral.find().populate({ path: "pregnancy", populate: "patient" }).lean();
+    const pregnancyIds = await getHospitalPregnancyIds(req.user.hospitalId);
+
+    const referrals = await Referral.find({
+      pregnancy: { $in: pregnancyIds }
+    })
+      .populate({ path: "pregnancy", populate: "patient" })
+      .lean();
+
     const rows = referrals.map((r) => ({
       hospitalId: r.pregnancy?.patient?.hospitalId || "",
       patient: `${r.pregnancy?.patient?.firstName || ""} ${r.pregnancy?.patient?.lastName || ""}`,
@@ -256,6 +306,7 @@ const exportReferralsCSV = async (req, res, next) => {
       status: r.status || "",
       notes: r.notes || "",
     }));
+
     sendCSV(res, rows, "referrals-report.csv");
   } catch (err) {
     next(err);

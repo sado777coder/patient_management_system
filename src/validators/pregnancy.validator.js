@@ -28,7 +28,15 @@ const createPregnancyValidator = Joi.object({
   notes: Joi.string().optional(),
 });
 
-const updatePregnancyValidator = createPregnancyValidator.min(1);
+const updatePregnancyValidator = Joi.object({
+  patient: Joi.string().pattern(objectId),
+  gravida: Joi.number().integer().min(0),
+  para: Joi.number().integer().min(0),
+  lastMenstrualPeriod: Joi.date(),
+  expectedDeliveryDate: Joi.date(),
+  riskLevel: Joi.string().valid("low", "medium", "high"),
+  notes: Joi.string(),
+}).min(1);
 
 module.exports = {
   createPregnancyValidator,
