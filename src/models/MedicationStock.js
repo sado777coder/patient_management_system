@@ -2,7 +2,18 @@ const mongoose = require("mongoose");
 
 const medicationStockSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+  index: true
+},
+    medication: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Medication",
+  required: true,
+  index: true,
+},
     batchNumber: { type: String, required: true },
 
     quantity: { type: Number, required: true, default: 0 },

@@ -1,64 +1,53 @@
 const Joi = require("joi");
 
-// reusable objectId validator
 const objectId = Joi.string().hex().length(24);
+
+// helper for currency
+const money = Joi.number()
+  .positive()
+  .precision(2)
+  .required()
+  .messages({
+    "number.base": "Amount must be a number",
+    "number.positive": "Amount must be greater than 0",
+    "number.precision": "Amount can have at most 2 decimal places",
+  });
 
 /**
  * CHARGE VALIDATION
  */
 const createChargeValidator = Joi.object({
   patient: objectId.required(),
-
-  amount: Joi.number()
-    .positive()
-    .precision(2)
-    .required()
-    .messages({
-      "number.positive": "Charge amount must be greater than 0",
-    }),
-
+  visit: objectId.optional(),
+  amount: money,
   description: Joi.string().min(3).max(255).required(),
 });
-
 
 /**
  * PAYMENT VALIDATION
  */
 const payBillValidator = Joi.object({
   patient: objectId.required(),
-
-  amount: Joi.number()
-    .positive()
-    .precision(2)
-    .required()
-    .messages({
-      "number.positive": "Payment amount must be greater than 0",
-    }),
+  visit: objectId.optional(), 
+  amount: money,
 });
-
 
 /**
  * REFUND VALIDATION
  */
 const refundValidator = Joi.object({
   patient: objectId.required(),
-
-  amount: Joi.number()
-    .positive()
-    .precision(2)
-    .required(),
-
+  visit: objectId.optional(), 
+  amount: money,
   description: Joi.string().min(3).max(255).optional(),
 });
 
-
 /**
- * PARAM VALIDATOR (patientId)
+ * PARAM VALIDATOR
  */
 const patientIdParamValidator = Joi.object({
   patientId: objectId.required(),
 });
-
 
 module.exports = {
   createChargeValidator,

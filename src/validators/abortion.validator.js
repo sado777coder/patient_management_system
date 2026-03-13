@@ -23,7 +23,10 @@ const createAbortionValidator = Joi.object({
   notes: Joi.string().optional(),
 });
 
-const updateAbortionValidator = createAbortionValidator.min(1);
+const updateAbortionValidator = createAbortionValidator.fork(
+  ["pregnancy", "date", "type"],
+  (field) => field.optional()
+);
 
 module.exports = {
   createAbortionValidator,

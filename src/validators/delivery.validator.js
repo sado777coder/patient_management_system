@@ -18,7 +18,23 @@ const createDeliveryValidator = Joi.object({
   complications: Joi.string().optional(),
 });
 
-const updateDeliveryValidator = createDeliveryValidator.min(1);
+const updateDeliveryValidator = Joi.object({
+  pregnancy: Joi.string().optional(),
+
+  deliveryDate: Joi.date().optional(),
+
+  type: Joi.string()
+    .valid("normal", "cesarean")
+    .optional(),
+
+  babyWeight: Joi.number().optional(),
+
+  babyGender: Joi.string()
+    .valid("male", "female", "other")
+    .optional(),
+
+  complications: Joi.string().optional(),
+}).min(1);
 
 module.exports = {
   createDeliveryValidator,

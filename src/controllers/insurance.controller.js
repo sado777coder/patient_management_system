@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const InsuranceClaim = require("../models/InsuranceClaim");
 const Billing = require("../models/Billing"); 
 const Ledger = require("../models/LedgerTransaction");
@@ -13,21 +14,29 @@ const submitClaim = async (req, res, next) => {
   try {
     const { invoiceId } = req.params;
 
-    const invoice = await Invoice.findById(invoiceId).populate("patient");
+    const invoice = await Invoice.findOne({
+      _id: invoiceId,
+      hospital: req.user.hospital,
+    }).populate("patient");
 
     if (!invoice)
       return res.status(404).json({ message: "Invoice not found" });
 
     const account = await Billing.findOne({
       patient: invoice.patient._id,
+      hospital: req.user.hospital,
     });
 
+    if (!account)
+      return res.status(404).json({ message: "Billing account not found" });
+
     const claim = await InsuranceClaim.create({
+      hospital: req.user.hospital,
       patient: invoice.patient._id,
       account: account._id,
       invoice: invoice._id,
       insurer: req.body.insurer,
-      claimAmount: invoice.totalAmount,
+      claimAmount: invoice.totalAmount, // already in pesewas
       status: "submitted",
       submittedAt: new Date(),
     });
@@ -35,7 +44,10 @@ const submitClaim = async (req, res, next) => {
     res.json({
       success: true,
       message: "Claim submitted to insurer",
-      data: claim,
+      data: {
+        ...claim.toObject(),
+        claimAmount: claim.claimAmount / 100,
+      },
     });
   } catch (err) {
     next(err);
@@ -49,43 +61,69 @@ const submitClaim = async (req, res, next) => {
  * POST /insurance/claim/:claimId/approve
  */
 const approveClaim = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
   try {
     const { claimId } = req.params;
     const { approvedAmount } = req.body;
 
-    const claim = await InsuranceClaim.findById(claimId);
+    const approvedInPesewas = Math.round(approvedAmount * 100);
 
-    if (!claim)
-      return res.status(404).json({ message: "Claim not found" });
+    let updatedClaim;
 
-    claim.status = "approved";
-    claim.approvedAmount = approvedAmount;
-    claim.approvedAt = new Date();
+    await session.withTransaction(async () => {
 
-    await claim.save();
+      const claim = await InsuranceClaim.findOne({
+        _id: claimId,
+        hospital: req.user.hospital,
+      }).session(session);
 
-    // ledger credit (money coming in)
-    await Ledger.create({
-      account: claim.account,
-      patient: claim.patient,
-      type: "payment",
-      amount: -approvedAmount,
-      description: "Insurance payment",
-      reference: claim._id.toString(),
-      createdBy: req.user._id,
+      if (!claim)
+        throw new Error("Claim not found");
+
+      claim.status = "approved";
+      claim.approvedAmount = approvedInPesewas;
+      claim.approvedAt = new Date();
+
+      await claim.save({ session });
+      updatedClaim = claim;
+
+      await Ledger.create(
+        [{
+          hospital: req.user.hospital,
+          account: claim.account,
+          patient: claim.patient,
+          type: "payment",
+          amount: -approvedInPesewas,
+          description: "Insurance payment",
+          reference: claim._id.toString(),
+          createdBy: req.user._id,
+        }],
+        { session }
+      );
+
+      const account = await Billing.findOne({
+        _id: claim.account,
+        hospital: req.user.hospital,
+      }).session(session);
+
+      account.balance -= approvedInPesewas;
+      await account.save({ session });
     });
-
-    // update wallet
-    const account = await Billing.findById(claim.account);
-    account.balance -= approvedAmount;
-    await account.save();
 
     res.json({
       success: true,
       message: "Claim approved & wallet credited",
+      data: {
+        ...updatedClaim.toObject(),
+        approvedAmount: updatedClaim.approvedAmount / 100,
+      },
     });
+
   } catch (err) {
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -97,7 +135,10 @@ const approveClaim = async (req, res, next) => {
  */
 const getInsurance = async (req, res, next) => {
   try {
-    const patient = await Patient.findById(req.params.id)
+    const patient = await Patient.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+    })
       .select("insurance")
       .lean();
 

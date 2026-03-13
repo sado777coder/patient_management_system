@@ -27,8 +27,25 @@ const createAntenatalVisitValidator = Joi.object({
   notes: Joi.string().optional(),
 });
 
-const updateAntenatalVisitValidator =
-  createAntenatalVisitValidator.min(1);
+const updateAntenatalVisitValidator = Joi.object({
+  pregnancy: Joi.string().pattern(objectId).optional(),
+
+  visitDate: Joi.date().optional(),
+
+  gestationalAgeWeeks: Joi.number().integer().min(0).optional(),
+
+  bloodPressure: Joi.string().optional(),
+
+  weight: Joi.number().optional(),
+
+  fetalHeartRate: Joi.number().optional(),
+
+  riskLevel: Joi.string()
+    .valid("low", "medium", "high")
+    .optional(),
+
+  notes: Joi.string().optional(),
+}).min(1);
 
 module.exports = {
   createAntenatalVisitValidator,

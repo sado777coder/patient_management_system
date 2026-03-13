@@ -2,11 +2,16 @@ const Unit = require("../models/Unit");
 
 const createUnit = async (req, res, next) => {
   try {
-    const unit = await Unit.create(req.body);
+    const unit = await Unit.create({
+      ...req.body,
+      hospital: req.user.hospital,
+    });
+
     res.status(201).json({
-        success:true,
-        message:"Unit",
-         data: unit });
+      success: true,
+      message: "Unit created",
+      data: unit,
+    });
   } catch (err) {
     next(err);
   }
@@ -14,11 +19,17 @@ const createUnit = async (req, res, next) => {
 
 const getUnits = async (req, res, next) => {
   try {
-    const units = await Unit.find({ isActive: true });
+    const units = await Unit.find({
+      hospital: req.user.hospital,
+      isActive: true,
+      isDeleted: false,
+    });
+
     res.status(200).json({
-        success:true,
-        message:"Available units",
-         data: units });
+      success: true,
+      message: "Available units",
+      data: units,
+    });
   } catch (err) {
     next(err);
   }
@@ -27,13 +38,13 @@ const getUnits = async (req, res, next) => {
 const updateUnit = async (req, res, next) => {
   try {
     const unit = await Unit.findOneAndUpdate(
-      { _id: req.params.id, isDeleted: false },
+      { _id: req.params.id, hospital: req.user.hospital, isDeleted: false },
       req.body,
       { new: true, runValidators: true }
     );
 
     if (!unit)
-      return res.status(404).json({ message: "Unit not found" });
+      return res.status(404).json({ success: false, message: "Unit not found" });
 
     res.status(200).json({
       success: true,
@@ -47,10 +58,14 @@ const updateUnit = async (req, res, next) => {
 
 const toggleUnitStatus = async (req, res, next) => {
   try {
-    const unit = await Unit.findById(req.params.id);
+    const unit = await Unit.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+      isDeleted: false,
+    });
 
     if (!unit)
-      return res.status(404).json({ message: "Unit not found" });
+      return res.status(404).json({ success: false, message: "Unit not found" });
 
     unit.isActive = !unit.isActive;
     await unit.save();
@@ -67,22 +82,29 @@ const toggleUnitStatus = async (req, res, next) => {
 
 const deleteUnit = async (req, res, next) => {
   try {
-    await Unit.findByIdAndUpdate(req.params.id, {
-      isDeleted: true,
-      isActive: false,
-    });
+    const unit = await Unit.findOneAndUpdate(
+      { _id: req.params.id, hospital: req.user.hospital, isDeleted: false },
+      { isDeleted: true, isActive: false },
+      { new: true }
+    );
+
+    if (!unit)
+      return res.status(404).json({ success: false, message: "Unit not found or already deleted" });
 
     res.status(200).json({
       success: true,
-      message: "Unit archived",
+      message: "Unit archived successfully",
+      data: unit,
     });
   } catch (err) {
     next(err);
   }
 };
 
-module.exports = { createUnit,
+module.exports = {
+  createUnit,
   getUnits,
   updateUnit,
   toggleUnitStatus,
-  deleteUnit, };
+  deleteUnit,
+};

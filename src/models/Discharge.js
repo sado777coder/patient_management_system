@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const dischargeSchema = new mongoose.Schema(
   {
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+  index: true
+},
     admission: { type: mongoose.Schema.Types.ObjectId, ref: "Admission" },
 
     summary: String,

@@ -15,7 +15,20 @@ const createLabResultValidator = Joi.object({
     .default("pending"),
 });
 
-const updateLabResultValidator = createLabResultValidator.min(1);
+const updateLabResultValidator = Joi.object({
+  visit: Joi.string().optional(),
+  patient: Joi.string().optional(),
+
+  testName: Joi.string().optional(),
+  result: Joi.string().optional(),
+  normalRange: Joi.string().optional(),
+
+  amount: Joi.number().optional(),
+
+  status: Joi.string()
+    .valid("pending", "completed")
+    .optional(),
+}).min(1);
 
 module.exports = {
   createLabResultValidator,

@@ -5,11 +5,14 @@ const { invalidatePatient } = require("../utils/cacheInvalidation");
 
 const stripe = new Stripe(process.env.STRIPE_SECRET);
 
-
-// CREATE CHECKOUT
+/**
+ * CREATE STRIPE CHECKOUT
+ */
 const createStripeCheckout = async (req, res, next) => {
   try {
     const { patient, amount } = req.body;
+
+    const amountPesewas = Math.round(amount * 100);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -20,7 +23,7 @@ const createStripeCheckout = async (req, res, next) => {
           price_data: {
             currency: "usd",
             product_data: { name: "Hospital Bill Payment" },
-            unit_amount: Math.round(amount * 100),
+            unit_amount: amountPesewas,
           },
           quantity: 1,
         },
@@ -30,56 +33,78 @@ const createStripeCheckout = async (req, res, next) => {
       cancel_url: `${process.env.FRONTEND_URL}/cancel`,
 
       metadata: {
-        patient,
-        amount,
-      },
+        patient: String(patient),
+        hospital: String(req.user.hospital),
+        amount: String(amountPesewas),
+      }
     });
 
     res.json({ url: session.url });
+
   } catch (err) {
     next(err);
   }
 };
 
-
 // WEBHOOK (SECURE)
 
 const stripeWebhook = async (req, res, next) => {
-  try {
-    const sig = req.headers["stripe-signature"];
+  const sig = req.headers["stripe-signature"];
 
-    const event = stripe.webhooks.constructEvent(
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
+  } catch (err) {
+    next (err);
+  }
+
+  try {
+
+    // prevent duplicate processing
+    const existing = await Ledger.findOne({ reference: event.id });
+    if (existing) return res.json({ received: true });
 
     if (event.type === "checkout.session.completed") {
-      const { patient, amount } = event.data.object.metadata;
 
-      const account = await Billing.findOne({ patient });
+      const session = event.data.object;
+
+      const patient = session.metadata.patient;
+      const hospital = session.metadata.hospital;
+      const amount = Number(session.metadata.amount);
+
+      const account = await Billing.findOne({
+        patient,
+        hospital,
+      });
 
       if (!account) return res.json({ received: true });
 
       await Ledger.create({
+        hospital,
         account: account._id,
         patient,
         type: "payment",
-        amount: -Number(amount),
+        amount: -amount,
         description: "Stripe payment",
+        reference: event.id,
       });
 
-      account.balance -= Number(amount);
+      account.balance -= amount;
       await account.save();
 
-      // clear cache
       await invalidatePatient(patient);
     }
 
     res.json({ received: true });
+
   } catch (err) {
-    console.error(err.message);
-    res.status(400).send(`Webhook Error`);
+    console.error(err);
+    next (err);
   }
 };
 

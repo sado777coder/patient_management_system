@@ -3,12 +3,12 @@ const Joi = require("joi");
 const createPrescriptionValidator = Joi.object({
   visit: Joi.string().required(),
 
-  diagnosis: Joi.string().required(), 
+  diagnosis: Joi.string().required(),
 
   medications: Joi.array()
     .items(
       Joi.object({
-        name: Joi.string().required(),
+        medication: Joi.string().required(), 
         dosage: Joi.string().required(),
         frequency: Joi.string().required(),
         duration: Joi.string().required(),
@@ -16,11 +16,18 @@ const createPrescriptionValidator = Joi.object({
     )
     .min(1)
     .required(),
-
-  prescribedBy: Joi.string().required(),
 });
 
-const updatePrescriptionValidator = createPrescriptionValidator.min(1);
+const updatePrescriptionValidator = Joi.object({
+  medications: Joi.array().items(
+    Joi.object({
+      medication: Joi.string(),
+      dosage: Joi.string(),
+      frequency: Joi.string(),
+      duration: Joi.string(),
+    })
+  ),
+}).min(1);
 
 module.exports = {
   createPrescriptionValidator,

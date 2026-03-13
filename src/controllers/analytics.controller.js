@@ -1,27 +1,25 @@
 const BedModel = require("../models/Bed");
 const AdmissionModel = require("../models/Admission");
-
 const getBedOccupancyAnalytics = async (req, res, next) => {
   try {
-    // Total Beds
-    const totalBeds = await BedModel.countDocuments();
+    const hospital= req.user.hospital;
 
-    // Occupied Beds
+    const totalBeds = await BedModel.countDocuments({ hospital });
+
     const occupiedBeds = await BedModel.countDocuments({
+      hospital,
       isOccupied: true,
     });
 
-    // Available Beds
     const availableBeds = totalBeds - occupiedBeds;
 
-    // Occupancy Rate
     const occupancyRate =
       totalBeds === 0
         ? 0
         : ((occupiedBeds / totalBeds) * 100).toFixed(2);
 
-    // Ward-Level Breakdown
     const wardBreakdown = await BedModel.aggregate([
+      { $match: { hospital } },
       {
         $group: {
           _id: "$ward",
@@ -57,10 +55,12 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
       },
     ]);
 
-    // Average Length of Stay
     const avgLengthOfStayData = await AdmissionModel.aggregate([
       {
-        $match: { status: "discharged" },
+        $match: {
+          hospital,
+          status: "discharged",
+        },
       },
       {
         $group: {
@@ -71,9 +71,9 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
     ]);
 
     const avgLengthOfStay =
-  avgLengthOfStayData?.[0]?.avgLengthOfStay != null
-    ? avgLengthOfStayData[0].avgLengthOfStay.toFixed(2)
-    : "0.00";
+      avgLengthOfStayData?.[0]?.avgLengthOfStay != null
+        ? avgLengthOfStayData[0].avgLengthOfStay.toFixed(2)
+        : "0.00";
 
     res.status(200).json({
       success: true,

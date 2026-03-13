@@ -1,14 +1,15 @@
 const Counter = require("../models/Counter");
 
 /**
- * Generates: GH-2026-000123
+ * Generates hospital-specific ID: GH-2026-000123
+ * @param {ObjectId} hospitalId
  */
-const generateHospitalId = async () => {
+const generateHospitalId = async (hospitalId) => {
   const year = new Date().getFullYear();
 
-  // atomic increment
+  // atomic increment, hospital-specific
   const counter = await Counter.findOneAndUpdate(
-    { name: `patient-${year}` },
+    { hospital: hospitalId, name: `patient-${year}` },
     { $inc: { seq: 1 } },
     { new: true, upsert: true }
   );
@@ -18,4 +19,4 @@ const generateHospitalId = async () => {
   return `GH-${year}-${padded}`;
 };
 
-module.exports = generateHospitalId
+module.exports = generateHospitalId;

@@ -3,10 +3,17 @@ const generateHospitalId = require("../services/hospitalId.service");
 
 const patientSchema = new mongoose.Schema(
   {
-    hospitalId: {
+    registrationNumber: {
       type: String,
       immutable: true,
     },
+
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+},
+
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, required: true, trim: true },
     gender: {
@@ -79,14 +86,27 @@ const patientSchema = new mongoose.Schema(
 
 //
 // ================= INDEXES =================
+patientSchema.index(
+  { partialFilterExpression: { isDeleted: false } }
+);
 //
-patientSchema.index({ hospitalId: 1 }, { unique: true });
-patientSchema.index({ isDeleted: 1, unit: 1, createdAt: -1 });
+patientSchema.index(
+  { hospital: 1, registrationNumber: 1 },
+  { unique: true }
+);
+
+patientSchema.index(
+  { hospital: 1, phone: 1 },
+  { unique: true, partialFilterExpression: { phone: { $exists: true } } }
+);
+
+patientSchema.index({hospital: 1, isDeleted: 1, unit: 1, createdAt: -1 });
 patientSchema.index({ firstName: 1, lastName: 1 });
 patientSchema.index({
   firstName: "text",
   lastName: "text",
   phone: "text",
+  registrationNumber: "text"
 });
 
 //
@@ -101,27 +121,25 @@ patientSchema.virtual("age").get(function () {
 //
 // ================= GLOBAL SOFT DELETE FILTER =================
 //
-patientSchema.pre(/^find/, async function () {
-  if (!this.getQuery().includeDeleted) {
+patientSchema.pre(/^find/, function () {
+  const query = this.getQuery();
+
+  if (!query.includeDeleted) {
     this.where({ isDeleted: false });
   }
+
+  delete query.includeDeleted;
 });
 
 //
 // ================= SAFE HOSPITAL ID GENERATION =================
 //
 patientSchema.pre("save", async function () {
-  if (this.hospitalId) return;
+  if (this.registrationNumber) return;
 
-  let unique = false;
-  while (!unique) {
-    const id = await generateHospitalId();
-    const existing = await mongoose.models.Patient.exists({ hospitalId: id });
-    if (!existing) {
-      this.hospitalId = id;
-      unique = true;
-    }
-  }
+  const generateHospitalId = require("../services/hospitalId.service");
+
+  this.registrationNumber = await generateHospitalId(this.hospital);
 });
 
 //

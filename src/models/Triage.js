@@ -2,36 +2,36 @@ const mongoose = require("mongoose");
 
 const triageSchema = new mongoose.Schema(
   {
-    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", 
-      required: true,
-       unique: true},
+    hospital: { type: mongoose.Schema.Types.ObjectId, ref: "Hospital", required: true,},
+    visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
 
-    // Vitals
     vitals: {
-      temperature: { type: Number },             // °C
-      bloodPressure: { type: String },           // "120/80" format
-      heartRate: { type: Number },               // bpm
-      respiratoryRate: { type: Number },         // breaths per min
-      pulse: {type:Number},
-      oxygenSaturation: { type: Number },       // SpO2 %
-      weight: { type: Number },                  // kg
-      height: { type: Number },                  // cm
+      temperature: { type: Number, min: 30, max: 45 },
+      bloodPressure: { type: String, match: /^\d{2,3}\/\d{2,3}$/ },
+      heartRate: { type: Number, min: 20, max: 250 },
+      respiratoryRate: { type: Number, min: 5, max: 60 },
+      pulse: { type: Number, min: 20, max: 250 },
+      oxygenSaturation: { type: Number, min: 50, max: 100 },
+      weight: { type: Number, min: 1, max: 500 },
+      height: { type: Number, min: 30, max: 300 },
     },
 
-    // Optional complaints or notes
     complaint: { type: String },
 
-    // Triage priority
     priority: {
       type: String,
       enum: ["low", "medium", "high", "critical"],
       default: "medium",
     },
 
-    // Reference to the user (nurse/triage officer) who performed triage
     triagedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
+
+triageSchema.index({ hospital: 1, visit: 1 }, { unique: true });
 
 module.exports = mongoose.model("Triage", triageSchema);

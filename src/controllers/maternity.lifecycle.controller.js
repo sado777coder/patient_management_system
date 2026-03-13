@@ -1,8 +1,16 @@
 const PregnancyModel = require("../models/Pregnancy");
 const AbortionModel = require("../models/Abortion");
 const PostnatalVisitModel = require("../models/PostnatalVisit");
+const DeliveryModel = require("../models/Delivery");
 const ReferralModel = require("../models/Referral");
+const clearCSVCache = require("../utils/invalidationCache");
 const logAudit = require("../models/AuditLog");
+
+// Multi-tenant query helper
+const withHospital = (req, query = {}) => ({
+  ...query,
+  hospital: req.user.hospital,
+});
 
 // Production-safe populate
 const maternityPopulate = {
@@ -10,62 +18,81 @@ const maternityPopulate = {
   select: "gravida para status riskLevel",
   populate: {
     path: "patient",
-    select: "hospitalId firstName lastName phone",
+    select: "hospital firstName lastName phone",
   },
 };
 
-/**
- * CREATE ABORTION
- * → Only allowed if pregnancy is ongoing
- * → Updates pregnancy status to "terminated"
- */
+/* ================================
+   CREATE ABORTION
+================================ */
 const createAbortion = async (req, res, next) => {
   try {
     const { pregnancy: pregnancyId } = req.body;
-    const pregnancy = await PregnancyModel.findById(pregnancyId);
 
-    if (!pregnancy) return res.status(404).json({ message: "Pregnancy not found" });
+    // Validate pregnancy belongs to hospital
+    const pregnancy = await PregnancyModel.findOne(
+      withHospital(req, { _id: pregnancyId })
+    );
+
+    if (!pregnancy)
+      return res.status(404).json({ message: "Pregnancy not found" });
+
     if (pregnancy.status !== "ongoing")
-      return res.status(400).json({ message: "Cannot record abortion for inactive pregnancy" });
+      return res.status(400).json({
+        message: "Cannot record abortion for inactive pregnancy",
+      });
 
-    const abortion = await AbortionModel.create(req.body);
+    // Create abortion (ONLY ONCE)
+    const abortion = await AbortionModel.create({
+      ...req.body,
+      hospital: req.user.hospital,
+    });
 
+    // Update pregnancy
     pregnancy.status = "terminated";
     await pregnancy.save();
 
+    // Clear cache correctly
+    await clearCSVCache("abortions", req.user.hospital);
+
+    // Audit
     await logAudit({
       userId: req.user.id,
       action: "CREATE_ABORTION",
       entity: "Abortion",
       entityId: abortion._id,
-      metadata: { pregnancy: pregnancyId, gestationalAgeWeeks: abortion.gestationalAgeWeeks },
+      metadata: {
+        pregnancy: pregnancyId,
+        gestationalAgeWeeks: abortion.gestationalAgeWeeks,
+      },
     });
 
-    res.status(201).json({ success: true, message: "Abortion recorded successfully", data: abortion });
+    res.status(201).json({
+      success: true,
+      message: "Abortion recorded successfully",
+      data: abortion,
+    });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET ABORTIONS
- */
+/* ================================
+   GET ABORTIONS
+================================ */
 const getAbortions = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const filter = {};
+    const filter = withHospital(req);
 
     if (req.query.from || req.query.to) {
       filter.date = {};
       if (req.query.from) filter.date.$gte = new Date(req.query.from);
       if (req.query.to) filter.date.$lte = new Date(req.query.to);
     }
-
-    const pregnancies = await PregnancyModel.find({ hospitalId: req.user.hospitalId }).select("_id");
-    filter.pregnancy = { $in: pregnancies.map((p) => p._id) };
 
     const [total, abortions] = await Promise.all([
       AbortionModel.countDocuments(filter),
@@ -86,16 +113,17 @@ const getAbortions = async (req, res, next) => {
   }
 };
 
-/**
- * GET ABORTION BY ID
- */
+/* ================================
+   GET ABORTION BY ID
+================================ */
 const getAbortionById = async (req, res, next) => {
   try {
-    const abortion = await AbortionModel.findById(req.params.id).populate(maternityPopulate);
+    const abortion = await AbortionModel.findOne(
+      withHospital(req, { _id: req.params.id })
+    ).populate(maternityPopulate);
 
-    if (!abortion) return res.status(404).json({ message: "Abortion not found" });
-    if (abortion.pregnancy?.patient?.hospitalId?.toString() !== req.user.hospitalId?.toString())
-      return res.status(403).json({ message: "Access denied" });
+    if (!abortion)
+      return res.status(404).json({ message: "Abortion not found" });
 
     res.status(200).json({ success: true, data: abortion });
   } catch (err) {
@@ -103,20 +131,35 @@ const getAbortionById = async (req, res, next) => {
   }
 };
 
-/**
- * CREATE POSTNATAL VISIT
- * → Only allowed if pregnancy is delivered
- */
+/* ================================
+   CREATE POSTNATAL VISIT
+================================ */
 const createPostnatalVisit = async (req, res, next) => {
   try {
     const { pregnancy: pregnancyId } = req.body;
-    const pregnancy = await PregnancyModel.findById(pregnancyId);
 
-    if (!pregnancy) return res.status(404).json({ message: "Pregnancy not found" });
-    if (pregnancy.status !== "delivered")
-      return res.status(400).json({ message: "Postnatal visits allowed only after delivery" });
+    const pregnancy = await PregnancyModel.findOne(
+      withHospital(req, { _id: pregnancyId })
+    );
 
-    const visit = await PostnatalVisitModel.create(req.body);
+    if (!pregnancy)
+      return res.status(404).json({ message: "Pregnancy not found" });
+
+    const deliveryExists = await DeliveryModel.findOne(
+      withHospital(req, { pregnancy: pregnancyId })
+    );
+
+    if (!deliveryExists)
+      return res.status(400).json({
+        message: "Postnatal visits allowed only after delivery",
+      });
+
+    const visit = await PostnatalVisitModel.create({
+      ...req.body,
+      hospital: req.user.hospital,
+    });
+
+    await clearCSVCache("postnatal", req.user.hospital,);
 
     await logAudit({
       userId: req.user.id,
@@ -126,52 +169,44 @@ const createPostnatalVisit = async (req, res, next) => {
       metadata: { pregnancy: pregnancyId, visitDate: visit.visitDate },
     });
 
-    res.status(201).json({ success: true, message: "Postnatal visit recorded", data: visit });
+    res.status(201).json({
+      success: true,
+      message: "Postnatal visit recorded",
+      data: visit,
+    });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET POSTNATAL VISITS
- */
+/* ================================
+   GET POSTNATAL VISITS
+================================ */
 const getPostnatalVisits = async (req, res, next) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = Math.min(parseInt(req.query.limit) || 10, 100);
-    const skip = (page - 1) * limit;
+    const filter = withHospital(req);
 
-    const filter = {};
-    if (req.query.from || req.query.to) {
-      filter.visitDate = {};
-      if (req.query.from) filter.visitDate.$gte = new Date(req.query.from);
-      if (req.query.to) filter.visitDate.$lte = new Date(req.query.to);
-    }
+    const visits = await PostnatalVisitModel.find(filter)
+      .populate(maternityPopulate)
+      .sort({ visitDate: -1 });
 
-    const pregnancies = await PregnancyModel.find({ hospitalId: req.user.hospitalId }).select("_id");
-    filter.pregnancy = { $in: pregnancies.map((p) => p._id) };
-
-    const [total, visits] = await Promise.all([
-      PostnatalVisitModel.countDocuments(filter),
-      PostnatalVisitModel.find(filter).populate(maternityPopulate).sort({ visitDate: -1 }).skip(skip).limit(limit),
-    ]);
-
-    res.status(200).json({ success: true, pagination: { total, page, pages: Math.ceil(total / limit), limit }, data: visits });
+    res.status(200).json({ success: true, data: visits });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET POSTNATAL VISIT BY ID
- */
+/* ================================
+   GET POSTNATAL VISIT BY ID
+================================ */
 const getPostnatalVisitById = async (req, res, next) => {
   try {
-    const visit = await PostnatalVisitModel.findById(req.params.id).populate(maternityPopulate);
+    const visit = await PostnatalVisitModel.findOne(
+      withHospital(req, { _id: req.params.id })
+    ).populate(maternityPopulate);
 
-    if (!visit) return res.status(404).json({ message: "Postnatal visit not found" });
-    if (visit.pregnancy?.patient?.hospitalId?.toString() !== req.user.hospitalId?.toString())
-      return res.status(403).json({ message: "Access denied" });
+    if (!visit)
+      return res.status(404).json({ message: "Postnatal visit not found" });
 
     res.status(200).json({ success: true, data: visit });
   } catch (err) {
@@ -179,81 +214,108 @@ const getPostnatalVisitById = async (req, res, next) => {
   }
 };
 
-/**
- * CREATE REFERRAL
- * → Updates pregnancy status to "referred" if ongoing
- */
+/* ================================
+   CREATE REFERRAL
+================================ */
 const createReferral = async (req, res, next) => {
   try {
     const { pregnancy: pregnancyId } = req.body;
-    const pregnancy = await PregnancyModel.findById(pregnancyId);
 
-    if (!pregnancy) return res.status(404).json({ message: "Pregnancy not found" });
+    const pregnancy = await PregnancyModel.findOne(
+      withHospital(req, { _id: pregnancyId })
+    );
 
-    const referral = await ReferralModel.create(req.body);
+    if (!pregnancy)
+      return res.status(404).json({ message: "Pregnancy not found" });
+
+    const referral = await ReferralModel.create({
+      ...req.body,
+      hospital: req.user.hospital,
+    });
 
     if (pregnancy.status === "ongoing") {
       pregnancy.status = "referred";
       await pregnancy.save();
     }
 
+    await clearCSVCache("referrals", req.user.hospital,);
+
     await logAudit({
       userId: req.user.id,
       action: "CREATE_REFERRAL",
       entity: "Referral",
       entityId: referral._id,
-      metadata: { pregnancy: pregnancyId, referredTo: referral.referredTo },
     });
 
-    res.status(201).json({ success: true, message: "Referral recorded successfully", data: referral });
+    res.status(201).json({
+      success: true,
+      message: "Referral recorded successfully",
+      data: referral,
+    });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET REFERRALS
- */
+/* ================================
+   GET REFERRALS (PAGINATED)
+================================ */
 const getReferrals = async (req, res, next) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = Math.min(parseInt(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const filter = {};
-    if (req.query.status) filter.status = req.query.status;
+    const filter = withHospital(req);
+
+    // Optional date filter
     if (req.query.from || req.query.to) {
       filter.referralDate = {};
       if (req.query.from) filter.referralDate.$gte = new Date(req.query.from);
       if (req.query.to) filter.referralDate.$lte = new Date(req.query.to);
     }
 
-    const pregnancies = await PregnancyModel.find({ hospitalId: req.user.hospitalId }).select("_id");
-    filter.pregnancy = { $in: pregnancies.map((p) => p._id) };
-
     const [total, referrals] = await Promise.all([
       ReferralModel.countDocuments(filter),
-      ReferralModel.find(filter).populate(maternityPopulate).sort({ referralDate: -1 }).skip(skip).limit(limit),
+      ReferralModel.find(filter)
+        .populate(maternityPopulate)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
     ]);
 
-    res.status(200).json({ success: true, pagination: { total, page, pages: Math.ceil(total / limit), limit }, data: referrals });
+    res.status(200).json({
+      success: true,
+      pagination: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+      },
+      data: referrals,
+    });
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET REFERRAL BY ID
- */
+
+/* ================================
+   GET REFERRAL BY ID
+================================ */
 const getReferralById = async (req, res, next) => {
   try {
-    const referral = await ReferralModel.findById(req.params.id).populate(maternityPopulate);
+    const referral = await ReferralModel.findOne(
+      withHospital(req, { _id: req.params.id })
+    ).populate(maternityPopulate);
 
-    if (!referral) return res.status(404).json({ message: "Referral not found" });
-    if (referral.pregnancy?.patient?.hospitalId?.toString() !== req.user.hospitalId?.toString())
-      return res.status(403).json({ message: "Access denied" });
+    if (!referral)
+      return res.status(404).json({ message: "Referral not found" });
 
-    res.status(200).json({ success: true, data: referral });
+    res.status(200).json({
+      success: true,
+      data: referral,
+    });
   } catch (err) {
     next(err);
   }
@@ -268,5 +330,5 @@ module.exports = {
   getPostnatalVisitById,
   createReferral,
   getReferrals,
-  getReferralById,
+  getReferralById 
 };

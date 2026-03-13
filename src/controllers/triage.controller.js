@@ -6,7 +6,8 @@ const TriageModel = require("../models/Triage");
 const createTriage = async (req, res, next) => {
   try {
     const triage = await TriageModel.create({
-      ...req.body,
+       ...req.body,
+        hospital: req.user.hospital,
       triagedBy: req.user._id,
     });
 
@@ -26,9 +27,12 @@ const createTriage = async (req, res, next) => {
  */
 const getTriages = async (req, res, next) => {
   try {
-    const triages = await TriageModel.find()
-      .populate("visit triagedBy", "name role")
-      .sort({ createdAt: -1 });
+    const triages = await TriageModel.find({
+  hospital: req.user.hospital,
+  isDeleted: false,
+})
+.populate("visit triagedBy", "name role")
+.sort({ createdAt: -1 });
 
     res.status(200).json({
       success:true,
@@ -45,11 +49,11 @@ const getTriages = async (req, res, next) => {
  */
 const updateTriage = async (req, res, next) => {
   try {
-    const triage = await TriageModel.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const triage = await TriageModel.findOneAndUpdate(
+  { _id: req.params.id, hospital: req.user.hospital },
+  req.body,
+  { new: true, runValidators: true }
+);
 
     res.status(200).json({
       success:true,
@@ -66,11 +70,24 @@ const updateTriage = async (req, res, next) => {
  */
 const deleteTriage = async (req, res, next) => {
   try {
-    await TriageModel.findByIdAndDelete(req.params.id);
+    const triage = await TriageModel.findOneAndUpdate(
+      { _id: req.params.id, hospital: req.user.hospital, isDeleted: false },
+      { isDeleted: true, deletedAt: new Date() },
+      { new: true }
+    );
+
+    if (!triage) {
+      return res.status(404).json({
+        success: false,
+        message: "Triage record not found or already deleted",
+      });
+    }
 
     res.status(200).json({
-      success:true,
-       message: "Deleted" });
+      success: true,
+      message: "Triage record soft-deleted successfully",
+      data: triage,
+    });
   } catch (err) {
     next(err);
   }

@@ -20,7 +20,21 @@ const createPostnatalValidator = Joi.object({
   notes: Joi.string().optional(),
 });
 
-const updatePostnatalValidator = createPostnatalValidator.min(1);
+const updatePostnatalValidator = Joi.object({
+  pregnancy: Joi.string().pattern(objectId).optional(),
+
+  visitDate: Joi.date().optional(),
+
+  motherCondition: Joi.string().optional(),
+
+  bloodPressure: Joi.string().optional(),
+
+  temperature: Joi.number().optional(),
+
+  complications: Joi.string().optional(),
+
+  notes: Joi.string().optional(),
+}).min(1);
 
 module.exports = {
   createPostnatalValidator,

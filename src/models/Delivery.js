@@ -2,11 +2,15 @@ const mongoose = require("mongoose");
 
 const deliverySchema = new mongoose.Schema(
   {
+   hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true
+},
     pregnancy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Pregnancy",
       required: true,
-      index: true, // optional, helps queries
     },
 
     deliveryDate: {
@@ -38,6 +42,6 @@ const deliverySchema = new mongoose.Schema(
 );
 
 // Enforce one delivery per pregnancy
-deliverySchema.index({ pregnancy: 1 }, { unique: true });
+deliverySchema.index({ hospital:1, pregnancy: 1 }, { unique: true });
 
 module.exports = mongoose.model("Delivery", deliverySchema);

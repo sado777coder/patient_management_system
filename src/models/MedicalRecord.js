@@ -2,6 +2,11 @@ const mongoose = require("mongoose");
 
 const medicalRecordSchema = new mongoose.Schema(
   {
+   hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+},
     visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
 
     diagnosis: String,
@@ -18,7 +23,7 @@ const medicalRecordSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-medicalRecordSchema.index({ visit: 1 });
+medicalRecordSchema.index({hospital:1, visit: 1 });
 medicalRecordSchema.index({ isDeleted: 1, createdAt: -1 });
 medicalRecordSchema.index({ createdBy: 1 });
 

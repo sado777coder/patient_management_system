@@ -1,15 +1,20 @@
 const express = require("express");
 const router = express.Router();
+
+const requireAuth = require("../middlewares/requireAuth");
+
 const {
   createStripeCheckout,
   stripeWebhook,
 } = require("../controllers/payment.controller");
 
-// patient starts payment
-router.post("/checkout", createStripeCheckout);
+router.post("/checkout", requireAuth, createStripeCheckout);
 
-// stripe calls this (NO auth middleware here)
-router.post("/webhook/stripe", stripeWebhook);
-
+// Stripe webhook must NOT use auth
+router.post(
+  "/webhook/stripe",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
 
 module.exports = router;

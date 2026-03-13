@@ -6,6 +6,7 @@ const requireAuth = require("../middlewares/requireAuth");
 
 const {
   exportPatientsCSV,
+  exportDiagnosisCSV,
   exportDispenseCSV,
   exportPrescriptionsCSV,
   exportLabsCSV,
@@ -22,6 +23,11 @@ router.use(requireAuth);
 router.get("/patients/csv",
     allow(permission.REGISTER_PATIENT,permission.MANAGE_USERS),
      exportPatientsCSV
+);
+
+router.get("/exportDiagnoses/csv",
+     allow(permission.PRESCRIBE,permission.MANAGE_USERS),
+      exportDiagnosisCSV,
 );
 
 router.get("/dispense/csv",

@@ -1,131 +1,287 @@
+const mongoose = require("mongoose");
 const PatientModel = require("../models/Patient");
+const redis = require("../config/redis");
+const { invalidatePatient } = require("../utils/cacheInvalidation");
 
-/**
- * CREATE
- */
+
+ // CREATE PATIENT
+
 const createPatient = async (req, res, next) => {
   try {
-     const patient = await PatientModel.create(req.body);
+    // Ensure the user is associated with a hospital
+    if (!req.user.hospital) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot create patient: user is not associated with a hospital",
+      });
+    }
+
+    const hospital = req.user.hospital;
+
+    // Attempt to create patient
+    const patient = await PatientModel.create({
+      ...req.body,
+      hospital,
+      createdBy: req.user._id,
+    });
 
     res.status(201).json({
-      success:true,
-       message: "Patient created", 
-       data: patient });
+      success: true,
+      message: "Patient created successfully",
+      data: patient,
+    });
+
   } catch (err) {
-    next(err);
+  console.log("Mongo error:", err);
+
+  if (err.code === 11000) {
+    const duplicateField = Object.keys(err.keyPattern || {});
+    console.log("Duplicate fields:", duplicateField);
+
+    return res.status(400).json({
+      success: false,
+      message: `Duplicate detected`,
+      fields: duplicateField
+    });
   }
+
+  next(err);
+}
 };
 
-// GET ALL
+/**
+ * GET ALL PATIENTS (PAGINATED)
+ */
 const getPatients = async (req, res, next) => {
   try {
-    const page = Number(req.query.page) || 1;
-    const limit = Number(req.query.limit) || 10;
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const filter = { isDeleted: false };
+    const filter = {
+      hospital: req.user.hospital,
+      isDeleted: false
+    };
 
-    const total = await PatientModel.countDocuments(filter);
+    const [patients, total] = await Promise.all([
+      PatientModel.find(filter)
+        .populate("unit", "name code")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
 
-    const patients = await PatientModel.find(filter)
-     .populate("unit", "name code")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+      PatientModel.countDocuments(filter)
+    ]);
 
     res.status(200).json({
-      success:true,
-       total, 
-       page, 
-       data: patients });
+      success: true,
+      message: "Patients fetched successfully",
+      data: patients,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit
+      }
+    });
+
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * GET ONE
+ * GET SINGLE PATIENT (with Redis caching)
  */
 const getPatientById = async (req, res, next) => {
   try {
-    const patient = await PatientModel.findById(req.params.id)
-     .populate("unit", "name code");
+    const cacheKey = `patient:${req.user.hospital}:${req.params.id}`;
 
-    if (!patient || patient.isDeleted)
-      return res.status(404).json({ message: "Not found" });
+    // Check cache
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        source: "cache",
+        data: JSON.parse(cached)
+      });
+    }
+
+    // Query database
+    const patient = await PatientModel.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+      isDeleted: false
+    }).populate("unit", "name code").lean();
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Store in cache for 60 seconds
+    await redis.set(cacheKey, JSON.stringify(patient), "EX", 60);
 
     res.status(200).json({
-      success:true,
-      message:"The patient is:",
-       data: patient });
-  } catch (err) {
-    next(err);
-  }
-};
+      success: true,
+      source: "database",
+      data: patient
+    });
 
-//UPDATE
-const updatePatient = async (req, res, next) => {
-  try {
-    // protect ID
-    delete req.body.hospitalId;
-
-    // prevent editing archived patients
-    const patient = await PatientModel.findOneAndUpdate(
-      { _id: req.params.id, isDeleted: false },
-      req.body,
-      { new: true }
-    ).populate("unit", "name code");
-
-    if (!patient)
-      return res.status(404).json({ message: "Patient not found" });
-
-    res.status(200).json({ 
-      success:true,
-      message:"Updated client",
-      data: patient });
-  } catch (err) {
-    next(err);
-  }
-};
-
- //SOFT DELETE
-const deletePatient = async (req, res, next) => {
-  try {
-    await PatientModel.findByIdAndUpdate(req.params.id, { isDeleted: true });
-
-    res.status(200).json({ message: "Patient archived" });
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * SEARCH PATIENT (FAST — text index)
- * by hospitalId | name | phone
+ * UPDATE PATIENT
+ */
+const updatePatient = async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid patient ID"
+      });
+    }
+
+    // Protect sensitive fields
+    const blockedFields = [
+      "hospital",
+      "registrationNumber",
+      "isDeleted",
+      "deletedAt",
+      "deletedBy"
+    ];
+    blockedFields.forEach(field => delete req.body[field]);
+
+    const patient = await PatientModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false
+      },
+      {
+        ...req.body,
+        updatedBy: req.user._id
+      },
+      {
+        new: true,
+        runValidators: true
+      }
+    ).populate("unit", "name code").lean();
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    // Invalidate cache after update
+    await invalidatePatient(`${req.user.hospital}:${patient._id}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Patient updated successfully",
+      data: patient
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * SOFT DELETE PATIENT
+ */
+const deletePatient = async (req, res, next) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid patient ID"
+      });
+    }
+
+    const patient = await PatientModel.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+      isDeleted: false
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found"
+      });
+    }
+
+    await patient.softDelete(req.user._id);
+
+    // Invalidate cache after deletion
+    await invalidatePatient(`${req.user.hospital}:${patient._id}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Patient archived successfully"
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * SEARCH PATIENTS (with optional caching)
  */
 const searchPatients = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query required"
+      });
+    }
 
-    if (!keyword)
-      return res.status(400).json({ message: "Search query required" });
+    const cacheKey = `patient-search:${req.user.hospital}:${keyword}`;
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        success: true,
+        source: "cache",
+        count: JSON.parse(cached).length,
+        data: JSON.parse(cached)
+      });
+    }
 
-    const patients = await PatientModel.find({
-      isDeleted: false,
-       $or: [
-    { hospitalId: keyword }, // exact match (super fast)
-    { $text: { $search: keyword } }
-  ],
-    })
-      .select({ score: { $meta: "textScore" } }) // relevance score
-      .sort({ score: { $meta: "textScore" } })   // best matches first
-      .limit(20);
+    const patients = await PatientModel.find(
+      {
+        hospital: req.user.hospital,
+        isDeleted: false,
+        $text: { $search: keyword }
+      },
+      { score: { $meta: "textScore" } }
+    )
+      .sort({ score: { $meta: "textScore" } })
+      .populate("unit", "name code")
+      .limit(20)
+      .lean();
+
+    // Cache search results for 30 seconds
+    await redis.set(cacheKey, JSON.stringify(patients), "EX", 30);
 
     res.status(200).json({
       success: true,
+      source: "database",
       count: patients.length,
-      data: patients,
+      data: patients
     });
+
   } catch (err) {
     next(err);
   }

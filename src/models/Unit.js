@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const unitSchema = new mongoose.Schema(
   {
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+  index: true
+},
     name: {
       type: String,
       required: true,

@@ -1,11 +1,15 @@
+const mongoose = require("mongoose");
 const DispenseModel = require("../models/Dispense");
 const BillingModel = require("../models/Billing");
+const LedgerModel = require("../models/LedgerTransaction");
 const MedicationStock = require("../models/MedicationStock");
 
 /**
- * CREATE DISPENSE (With Stock Validation + Billing)
+ * CREATE DISPENSE (Stock Safe + Ledger Billing + Pesewas)
  */
 const createDispense = async (req, res, next) => {
+  const session = await mongoose.startSession();
+
   try {
     const { patient, prescription, items } = req.body;
 
@@ -13,71 +17,106 @@ const createDispense = async (req, res, next) => {
       return res.status(400).json({ error: "Items are required" });
     }
 
-    let totalAmount = 0;
-    const processedItems = [];
+    let createdDispense;
 
-    for (let item of items) {
-      //  Check medication exists
-      const medication = await MedicationStock.findById(item.medication);
+    await session.withTransaction(async () => {
+      let totalAmount = 0;
+      const processedItems = [];
 
-      if (!medication) {
-        return res.status(404).json({
-          error: `Medication not found for ID: ${item.medication}`,
+      for (const item of items) {
+        const medication = await MedicationStock.findOne({
+          _id: item.medication,
+          hospital: req.user.hospital,
+        }).session(session);
+
+        if (!medication)
+          throw new Error("Medication not found");
+
+        if (medication.quantity < item.quantity)
+          throw new Error(
+            `Insufficient stock for ${medication.name}`
+          );
+
+        if (medication.expiryDate && medication.expiryDate < new Date())
+          throw new Error(`${medication.name} is expired`);
+
+        //  ALWAYS TRUST DATABASE PRICE
+        const priceInPesewas = Math.round(medication.unitPrice * 100);
+        const amount = priceInPesewas * item.quantity;
+
+        totalAmount += amount;
+
+        // Deduct stock
+        medication.quantity -= item.quantity;
+        await medication.save({ session });
+
+        processedItems.push({
+          medication: medication._id,
+          quantity: item.quantity,
+          price: priceInPesewas,
         });
       }
 
-      // Check stock
-      if (medication.quantity < item.quantity) {
-        return res.status(400).json({
-          error: `Insufficient stock for ${medication.name}`,
-        });
+      const dispense = await DispenseModel.create(
+        [{
+          hospital: req.user.hospital,
+          patient,
+          prescription,
+          items: processedItems,
+          totalAmount,
+          dispensedBy: req.user._id,
+        }],
+        { session }
+      );
+
+      createdDispense = dispense[0];
+
+      let account = await BillingModel.findOne({
+        patient,
+        hospital: req.user.hospital,
+      }).session(session);
+
+      if (!account) {
+        const created = await BillingModel.create(
+          [{ patient, hospital: req.user.hospital }],
+          { session }
+        );
+        account = created[0];
       }
 
-      // Reduce stock
-      medication.quantity -= item.quantity;
-      await medication.save();
+      if (account.isFrozen)
+        throw new Error("Account is frozen");
 
-      // Calculate total
-      const amount = item.price * item.quantity;
-      totalAmount += amount;
-
-      processedItems.push({
-        medication: item.medication,
-        quantity: item.quantity,
-        price: item.price,
-      });
-    }
-
-    // Create dispense record
-    const dispense = await DispenseModel.create({
-      patient,
-      prescription,
-      items: processedItems,
-      totalAmount,
-      dispensedBy: req.user?._id,
-    });
-
-    // Create billing record
-    await BillingModel.create({
-      patient,
-      items: [
-        {
-          description: "Medication Dispense",
+      await LedgerModel.create(
+        [{
+          hospital: req.user.hospital,
+          account: account._id,
+          patient,
+          type: "charge",
           amount: totalAmount,
-        },
-      ],
-      totalAmount,
-      paymentStatus: "pending",
+          description: "Medication Dispense",
+          createdBy: req.user._id,
+        }],
+        { session }
+      );
+
+      account.balance += totalAmount;
+      await account.save({ session });
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: "Medication dispensed. Bill added. Please pay at Revenue.",
-      data: dispense,
+      message: "Medication dispensed. Bill added successfully.",
+      data: {
+        ...createdDispense.toObject(),
+        totalAmount: createdDispense.totalAmount / 100,
+      },
     });
 
   } catch (err) {
     next(err);
+  } finally {
+    session.endSession();
   }
 };
 
@@ -87,7 +126,7 @@ const createDispense = async (req, res, next) => {
  */
 const getDispenses = async (req, res, next) => {
   try {
-    const records = await DispenseModel.find()
+    const records = await DispenseModel.find({hospital: req.user.hospital})
       .populate("patient")
       .populate("dispensedBy")
       .populate("items.medication", "name batchNumber unitPrice");

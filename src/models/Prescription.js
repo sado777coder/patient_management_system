@@ -2,17 +2,25 @@ const mongoose = require("mongoose");
 
 const prescriptionSchema = new mongoose.Schema(
   {
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+},
     visit: { type: mongoose.Schema.Types.ObjectId, ref: "Visit", required: true },
      diagnosis: { type: mongoose.Schema.Types.ObjectId, ref: "Diagnosis", required: true },
 
     medications: [
-      {
-        name: String,
-        dosage: String,
-        frequency: String,
-        duration: String,
-      },
-    ],
+  {
+    medication: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Medication",
+    },
+    dosage: String,
+    frequency: String,
+    duration: String,
+  },
+],
 
     prescribedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
@@ -23,7 +31,7 @@ const prescriptionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-prescriptionSchema.index({ visit: 1 });
+prescriptionSchema.index({hospital:1, visit: 1 });
 prescriptionSchema.index({ isDeleted: 1, createdAt: -1 });
 prescriptionSchema.index({ prescribedBy: 1 });
 

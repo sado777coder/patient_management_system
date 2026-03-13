@@ -8,6 +8,7 @@ const permissions = require("../middlewares/permissions");
 const {
   registerUser,
   loginUser,
+  changePassword
 } = require("../controllers/user.controller");
 
 const {
@@ -19,13 +20,13 @@ const {
 // login is public
 router.post("/login", validate(loginUserValidator), loginUser);
 
-
 // everything below requires auth
 router.use(requireAuth);
+router.patch("/change-password", changePassword);
 
 router.post(
   "/register",
-  allowRoles(permissions.MANAGE_USERS),
+  allowRoles(permissions.SUPER_ADMIN, permissions.MANAGE_USERS),
   validate(registerUserValidator),
   registerUser
 );

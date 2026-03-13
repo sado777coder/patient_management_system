@@ -10,7 +10,8 @@ const createMedication = async (req, res) => {
     const { error } = createMedicationStockValidator.validate(req.body);
     if (error) return res.status(400).json({ error: error.message });
 
-    const medication = await MedicationStock.create(req.body);
+    const medication = await MedicationStock.create({...req.body,
+       hospital: req.user.hospital});
     res.status(201).json(medication);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -32,7 +33,8 @@ const getAllMedications = async (req, res) => {
     const total = await MedicationStock.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
 
-    const medications = await MedicationStock.find(query)
+    const medications = await MedicationStock.find(query, {
+       hospital: req.user.hospital})
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -52,7 +54,8 @@ const getAllMedications = async (req, res) => {
 // GET ONE
 const getMedicationById = async (req, res) => {
   try {
-    const medication = await MedicationStock.findById(req.params.id);
+    const medication = await MedicationStock.findById(req.params.id, {
+      hospital: req.user.hospital});
     if (!medication)
       return res.status(404).json({ error: "Medication not found" });
 
@@ -69,6 +72,8 @@ const updateMedication = async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
 
     const medication = await MedicationStock.findByIdAndUpdate(
+      {...req.body,
+  hospital: req.user.hospital},
       req.params.id,
       req.body,
       { new: true }
@@ -86,7 +91,9 @@ const updateMedication = async (req, res) => {
 // DELETE
 const deleteMedication = async (req, res) => {
   try {
-    const medication = await MedicationStock.findByIdAndDelete(req.params.id);
+    const medication = await MedicationStock.findByIdAndDelete(req.params.id,
+      {
+         hospital: req.user.hospital});
 
     if (!medication)
       return res.status(404).json({ error: "Medication not found" });

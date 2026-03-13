@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 
 const referralSchema = new mongoose.Schema(
   {
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+  index: true
+},
     pregnancy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Pregnancy",

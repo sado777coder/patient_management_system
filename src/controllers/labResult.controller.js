@@ -4,7 +4,7 @@ const BillingModel = require("../models/Billing");
 
 const createLabResult = async (req, res, next) => {
   try {
-    const { patient, testName, amount } = req.body;
+    const { patient, testName, amount} = req.body;
 
     //amount must come from lab staff
     if (!amount) {
@@ -15,6 +15,8 @@ const createLabResult = async (req, res, next) => {
 
     //create bill FIRST
     await BillingModel.create({
+       ...req.body,
+  hospital: req.user.hospital,
       patient,
       items: [
         {
@@ -26,7 +28,8 @@ const createLabResult = async (req, res, next) => {
     });
 
     //then create result
-    const result = await LabResultModel.create(req.body);
+    const result = await LabResultModel.create({...req.body,
+      hospital: req.user.hospital,});
 
     res.status(201).json({
       success: true,
@@ -43,7 +46,7 @@ const createLabResult = async (req, res, next) => {
  */
 const getLabResults = async (req, res, next) => {
   try {
-    const results = await LabResultModel.find()
+    const results = await LabResultModel.find({ hospital: req.user.hospital,})
       .populate({
         path: "visit",
         populate: ["patient", "doctor"],
@@ -64,16 +67,19 @@ const getLabResults = async (req, res, next) => {
  */
 const getLabResultById = async (req, res, next) => {
   try {
-    const result = await LabResultModel.findById(req.params.id)
-      .populate("visit");
+    const result = await LabResultModel.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+    }).populate("visit");
 
     if (!result)
       return res.status(404).json({ message: "Lab result not found" });
 
     res.status(200).json({
-      success:true,
-      message:"Result",
-       data: result });
+      success: true,
+      message: "Result",
+      data: result,
+    });
   } catch (err) {
     next(err);
   }
@@ -84,16 +90,27 @@ const getLabResultById = async (req, res, next) => {
  */
 const updateLabResult = async (req, res, next) => {
   try {
-    const result = await LabResultModel.findByIdAndUpdate(
-      req.params.id,
+    const result = await LabResultModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+      },
       req.body,
-      { new: true }
+      { new: true, runValidators: true }
     );
 
-    res.status(200).json({ 
-      success:true,
-      message:"Updated result",
-      data: result });
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: "Lab result not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Lab result updated",
+      data: result,
+    });
   } catch (err) {
     next(err);
   }
@@ -104,11 +121,18 @@ const updateLabResult = async (req, res, next) => {
  */
 const deleteLabResult = async (req, res, next) => {
   try {
-    await LabResultModel.findByIdAndDelete(req.params.id);
+    const result = await LabResultModel.findOneAndDelete({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+    });
 
-    res.status(200).json({ 
-      success:true,
-      message: "Deleted" });
+    if (!result)
+      return res.status(404).json({ message: "Lab result not found" });
+
+    res.status(200).json({
+      success: true,
+      message: "Deleted",
+    });
   } catch (err) {
     next(err);
   }

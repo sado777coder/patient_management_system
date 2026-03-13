@@ -1,7 +1,7 @@
 const Joi = require("joi");
 
 const createMedicationStockValidator = Joi.object({
-  name: Joi.string().required(),
+   medication: Joi.string().required(),
   batchNumber: Joi.string().required(),
 
   quantity: Joi.number().min(0).required(),

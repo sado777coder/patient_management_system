@@ -20,7 +20,21 @@ const createReferralValidator = Joi.object({
   notes: Joi.string().optional(),
 });
 
-const updateReferralValidator = createReferralValidator.min(1);
+const updateReferralValidator = Joi.object({
+  pregnancy: Joi.string().pattern(objectId).optional(),
+
+  referredTo: Joi.string().optional(),
+
+  reason: Joi.string().optional(),
+
+  referralDate: Joi.date().optional(),
+
+  status: Joi.string()
+    .valid("pending", "completed")
+    .optional(),
+
+  notes: Joi.string().optional(),
+}).min(1);
 
 module.exports = {
   createReferralValidator,

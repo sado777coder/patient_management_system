@@ -11,7 +11,12 @@ const hashPassowrd = async (password) => {
 // Generate JWT
 const generateToken = (user) => {
   return jwt.sign(
-    { userId: user._id, username: user.name },
+    {
+      userId: user._id,
+      username: user.name,
+      hospitalId: user.hospitalId,
+      role: user.role 
+    },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );

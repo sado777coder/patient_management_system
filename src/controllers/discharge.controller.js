@@ -2,91 +2,114 @@ const mongoose = require("mongoose");
 const DischargeModel = require("../models/Discharge");
 const AdmissionModel = require("../models/Admission");
 const BedModel = require("../models/Bed");
-const BillModel = require("../models/Billing"); // if you have billing
+const BillModel = require("../models/Billing");
+const logAudit = require("../models/AuditLog"); // import the helper
 
 const dischargePatient = async (req, res, next) => {
   const session = await mongoose.startSession();
-  session.startTransaction();
 
   try {
+    session.startTransaction();
+
     const { admission, summary } = req.body;
 
-    const admissionRecord = await AdmissionModel.findById(admission).session(session);
+    if (!admission) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Admission ID is required",
+      });
+    }
+
+    // Find admission belonging to user's hospital
+    const admissionRecord = await AdmissionModel.findOne({
+      _id: admission,
+      hospital: req.user.hospital,
+    }).session(session);
 
     if (!admissionRecord) {
       await session.abortTransaction();
-      return res.status(404).json({ message: "Admission not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Admission not found",
+      });
     }
 
     if (admissionRecord.status === "discharged") {
       await session.abortTransaction();
-      return res.status(400).json({ message: "Patient already discharged" });
+      return res.status(400).json({
+        success: false,
+        message: "Patient already discharged",
+      });
     }
 
-    // OPTIONAL: Prevent discharge if unpaid bills exist
-    const unpaidBills = await BillModel.find({
+    // Prevent discharge if unpaid bills exist
+    const unpaidBills = await BillModel.countDocuments({
+      hospital: req.user.hospital,
       patient: admissionRecord.patient,
       status: "UNPAID",
     }).session(session);
 
-    if (unpaidBills.length > 0) {
+    if (unpaidBills > 0) {
       await session.abortTransaction();
       return res.status(400).json({
+        success: false,
         message: "Outstanding bills must be paid before discharge",
       });
     }
 
     // Calculate Length of Stay
     const dischargedAt = new Date();
+
     const lengthOfStay =
       (dischargedAt - admissionRecord.createdAt) / (1000 * 60 * 60 * 24);
+
+    const totalDays = Math.ceil(lengthOfStay);
 
     // Update admission
     admissionRecord.status = "discharged";
     admissionRecord.dischargedAt = dischargedAt;
-    admissionRecord.lengthOfStay = Math.ceil(lengthOfStay);
+    admissionRecord.lengthOfStay = totalDays;
+
     await admissionRecord.save({ session });
 
     // Free bed
-    await BedModel.findByIdAndUpdate(
-      admissionRecord.bed,
-      { isOccupied: false },
+    if (admissionRecord.bed) {
+      await BedModel.findByIdAndUpdate(
+        admissionRecord.bed,
+        { isOccupied: false },
+        { session }
+      );
+    }
+
+    // Create discharge record
+    const discharge = await DischargeModel.create(
+      [
+        {
+          hospital: req.user.hospital,
+          admission,
+          patient: admissionRecord.patient,
+          summary,
+          dischargedBy: req.user._id,
+        },
+      ],
       { session }
     );
 
-   // Create discharge record
-const discharge = await DischargeModel.create(
-  [
-    {
-      admission,
-      patient: admissionRecord.patient,
-      summary,
-      dischargedBy: req.user._id,
-    },
-  ],
-  { session }
-);
-
-// Create Audit Log
-await AuditLogModel.create(
-  [
-    {
-      user: req.user._id,
+    // Create audit log
+    await logAudit({
+      userId: req.user._id,
       action: "DISCHARGE_PATIENT",
-      collection: "Discharge",
-      documentId: discharge[0]._id,
+      entity: "Discharge",
+      entityId: discharge[0]._id,
       metadata: {
         patient: admissionRecord.patient,
-        admission: admission,
-        lengthOfStay: Math.ceil(lengthOfStay),
+        admission,
+        lengthOfStay: totalDays,
       },
-    },
-  ],
-  { session }
-);
+    });
 
     await session.commitTransaction();
-    session.endSession();
 
     res.status(201).json({
       success: true,
@@ -94,27 +117,39 @@ await AuditLogModel.create(
       data: discharge[0],
     });
 
-  } catch (err) {
+  } catch (error) {
     await session.abortTransaction();
+    next(error);
+  } finally {
     session.endSession();
-    next(err);
   }
 };
 
+
 const getDischarges = async (req, res, next) => {
   try {
-    const discharges = await DischargeModel.find()
+    const discharges = await DischargeModel.find({
+      hospital: req.user.hospital,
+    })
       .populate({
         path: "admission",
-        populate: "patient bed",
-      });
+        populate: [
+          { path: "patient" },
+          { path: "bed" },
+        ],
+      })
+      .populate("dischargedBy", "name email role")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      message:"Discharged patients",
-       data: discharges });
-  } catch (err) {
-    next(err);
+      message: "Discharged patients",
+      count: discharges.length,
+      data: discharges,
+    });
+
+  } catch (error) {
+    next(error);
   }
 };
 

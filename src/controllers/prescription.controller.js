@@ -3,9 +3,12 @@ const Diagnosis = require("../models/Diagnosis");
 
 const createPrescription = async (req, res, next) => {
   try {
-    const { visit, diagnosis, prescribedBy, medications } = req.body;
+    const { visit, diagnosis, medications } = req.body;
 
-    const diagnosisRecord = await Diagnosis.findById(diagnosis);
+    const diagnosisRecord = await Diagnosis.findOne({
+      _id: diagnosis,
+      hospital: req.user.hospital,
+    });
 
     if (!diagnosisRecord) {
       return res.status(404).json({
@@ -14,7 +17,6 @@ const createPrescription = async (req, res, next) => {
       });
     }
 
-    // Ensure diagnosis matches visit
     if (diagnosisRecord.visit.toString() !== visit) {
       return res.status(400).json({
         success: false,
@@ -23,10 +25,11 @@ const createPrescription = async (req, res, next) => {
     }
 
     const prescription = await PrescriptionModel.create({
+      hospital: req.user.hospital,
       visit,
       diagnosis,
-      prescribedBy,
       medications,
+      prescribedBy: req.user._id,
     });
 
     res.status(201).json({
@@ -35,59 +38,93 @@ const createPrescription = async (req, res, next) => {
       data: prescription,
     });
   } catch (error) {
-    next(
-      error
-    );
+    next(error);
   }
 };
 
 const getPrescriptions = async (req, res, next) => {
- try {
-   const prescriptions = await PrescriptionModel.find({ isDeleted: false })
-    .populate("visit prescribedBy");
+  try {
+    const prescriptions = await PrescriptionModel.find({
+      hospital: req.user.hospital,
+      isDeleted: false,
+    })
+      .populate("visit")
+      .populate("prescribedBy", "name email")
+      .sort({ createdAt: -1 });
 
-  res.json({
-    success: true,
-    data: prescriptions,
-  });
- } catch (error) {
-  next (error);
- }
+    res.json({
+      success: true,
+      data: prescriptions,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 const updatePrescription = async (req, res, next) => {
   try {
+    // Protect immutable fields
+    delete req.body.hospital;
+    delete req.body.visit;
+    delete req.body.diagnosis;
+    delete req.body.prescribedBy;
     delete req.body.isDeleted;
+    delete req.body.deletedAt;
 
-  const prescription = await PrescriptionModel.findOneAndUpdate(
-    { _id: req.params.id, isDeleted: false },
-    req.body,
-    { new: true }
-  );
+    const prescription = await PrescriptionModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      req.body,
+      { new: true, runValidators: true }
+    );
 
-  res.json({
-    success: true,
-    message: "Updated",
-    data: prescription,
-  });
+    if (!prescription)
+      return res.status(404).json({
+        success: false,
+        message: "Prescription not found",
+      });
+
+    res.json({
+      success: true,
+      message: "Updated",
+      data: prescription,
+    });
   } catch (error) {
-    next (error);
+    next(error);
   }
 };
 
 const deletePrescription = async (req, res, next) => {
- try {
-   await PrescriptionModel.findByIdAndUpdate(req.params.id, {
-    isDeleted: true,
-  });
+  try {
+    const prescription = await PrescriptionModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+      { new: true }
+    );
 
-  res.json({
-    success: true,
-    message: "Deleted",
-  });
- } catch (error) {
-  next (error);
- }
+    if (!prescription)
+      return res.status(404).json({
+        success: false,
+        message: "Prescription not found",
+      });
+
+    res.json({
+      success: true,
+      message: "Deleted",
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 module.exports = {

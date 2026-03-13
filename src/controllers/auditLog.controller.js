@@ -1,6 +1,5 @@
 const AuditLogModel = require("../models/AuditLog");
 
-
 /**
  * GET ALL LOGS (paginated + filtered)
  * admin only
@@ -11,13 +10,15 @@ const getAuditLogs = async (req, res, next) => {
     const limit = Number(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    const { user, action, collection, fromDate, toDate } = req.query;
+    const { user, action, entity, fromDate, toDate } = req.query;
 
-    const filter = {};
+    const filter = {
+      hospital: req.user.hospital, // always restrict to hospital
+    };
 
     if (user) filter.user = user;
     if (action) filter.action = action;
-    if (collection) filter.collection = collection;
+    if (entity) filter.entity = entity;
 
     if (fromDate || toDate) {
       filter.createdAt = {};
@@ -42,11 +43,12 @@ const getAuditLogs = async (req, res, next) => {
       count: logs.length,
       data: logs,
     });
+
   } catch (err) {
     next(err);
   }
 };
 
 module.exports = {
- getAuditLogs
+  getAuditLogs,
 };

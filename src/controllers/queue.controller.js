@@ -13,18 +13,17 @@ const addToQueue = async (req, res, next) => {
   try {
     const { patientId, unitId, priority } = req.body;
 
-    // create queue entry
     const entry = await UnitQueue.create({
+      hospital: req.user.hospital,
       patient: patientId,
       unit: unitId,
       priority: priority || 0,
     });
 
-    // auto increment attendance
     const today = new Date().toISOString().slice(0, 10);
 
     await UnitAttendance.findOneAndUpdate(
-      { unit: unitId, date: today },
+      { unit: unitId, date: today, hospital: req.user.hospital },
       { $inc: { count: 1 } },
       { upsert: true, new: true }
     );
@@ -47,6 +46,8 @@ const nextPatient = async (req, res, next) => {
 
     const next = await UnitQueue.findOneAndUpdate(
       {
+        ...req.body,
+         hospital: req.user.hospital,
         unit: unitId,
         status: "waiting",
       },
@@ -78,6 +79,7 @@ const nextPatient = async (req, res, next) => {
 const getUnitQueue = async (req, res, next) => {
   try {
     const queue = await UnitQueue.find({
+      hospital: req.user.hospital,
       unit: req.params.unitId,
       status: "waiting",
     })
@@ -103,6 +105,8 @@ const transferPatient = async (req, res, next) => {
 
     // save transfer history
     await UnitTransfer.create({
+      ...req.body,
+         hospital: req.user.hospital,
       patient: patientId,
       from,
       to,
@@ -111,7 +115,10 @@ const transferPatient = async (req, res, next) => {
     });
 
     // update patient unit
-    await Patient.findByIdAndUpdate(patientId, { unit: to });
+    await Patient.findByIdAndUpdate(patientId,
+      {...req.body,
+         hospital: req.user.hospital,},
+       { unit: to });
 
     res.json({
       success: true,
@@ -129,7 +136,9 @@ const getTodayAttendance = async (req, res, next) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
 
-    const stats = await UnitAttendance.find({ date: today })
+    const stats = await UnitAttendance.find({ date: today ,
+         hospital: req.user.hospital,
+    })
       .populate("unit", "name")
       .select("unit count -_id");
 

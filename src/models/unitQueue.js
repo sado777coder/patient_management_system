@@ -3,6 +3,12 @@ const mongoose = require("mongoose");
 
 const unitQueueSchema = new mongoose.Schema(
   {
+    hospital: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Hospital",
+  required: true,
+  index: true
+},
     unit: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Unit",

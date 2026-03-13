@@ -1,11 +1,7 @@
 const redis = require("../config/redis");
 
 const invalidatePatient = async (patientId) => {
-  const keys = await redis.keys(`*${patientId}*`);
-
-  if (keys.length) {
-    await redis.del(keys);
-  }
+  await redis.del(`patient:${patientId}`);
 };
 
 module.exports = { invalidatePatient };

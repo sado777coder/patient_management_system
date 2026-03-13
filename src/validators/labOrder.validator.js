@@ -3,7 +3,6 @@ const Joi = require("joi");
 // CREATE LAB ORDER
 const createLabOrderValidator = Joi.object({
   diagnosis: Joi.string().required(),
-  requestedBy: Joi.string().required(),
   tests: Joi.array().items(Joi.string()).min(1).required(),
   notes: Joi.string().optional()
 });

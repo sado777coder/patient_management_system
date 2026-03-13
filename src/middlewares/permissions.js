@@ -20,6 +20,8 @@ const permissions = {
   VIEW_ALL_RECORDS: ["admin","record_officer", "doctor"],
 
   MANAGE_USERS: ["admin"],
+  
+  SUPER_ADMIN: "super_admin",
 };
 
 module.exports = permissions;
