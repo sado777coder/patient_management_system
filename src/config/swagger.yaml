@@ -1,29 +1,78 @@
-openapi: 3.0.0
+openapi: 3.0.3
 
 info:
   title: Patient Management System API
   version: 1.0.0
-  description: Complete Hospital ERP (Clinical + Pharmacy + Lab + Maternity + Billing + Audit)
+  description: |
+    Full Hospital Management System API.
+
+    Modules Included:
+    - Authentication
+    - Hospitals & Admin
+    - Patients
+    - Visits
+    - Triage
+    - Diagnosis
+    - Lab Orders & Results
+    - Pharmacy & Prescriptions
+    - Billing & Payments
+    - Insurance Claims
+    - Bed & Admission Management
+    - Maternal Health (Antenatal, Delivery, Postnatal, Abortion)
+    - Referrals
+    - Queue System
+    - Audit Logs
+    - Reporting & Analytics
 
 servers:
-  - url: http://localhost:3004
+  - url: http://localhost:3004/api
     description: Local
-  - url: https://patient-management-system-6jvc.onrender.com
+  - url: https://patient-management-system-6jvc.onrender.com/api
     description: Production
 
 security:
   - bearerAuth: []
 
-############################################
+tags:
+  - name: Auth
+  - name: Hospitals
+  - name: Users
+  - name: Patients
+  - name: Visits
+  - name: Triage
+  - name: Diagnoses
+  - name: Prescriptions
+  - name: Medications
+  - name: Pharmacy
+  - name: Lab Orders
+  - name: Lab Results
+  - name: Billing
+  - name: Payments
+  - name: Insurance
+  - name: Admissions
+  - name: Beds
+  - name: Discharges
+  - name: Appointments
+  - name: Antenatal
+  - name: Delivery
+  - name: Postnatal
+  - name: Abortion
+  - name: Referrals
+  - name: Queue
+  - name: Audit Logs
+  - name: Analytics
+  - name: Reporting
+
+########################################
 # PATHS
-############################################
+########################################
 
 paths:
 
-  ################ AUTH ################
   /auth/login:
     post:
-      summary: Login user
+      tags: [Auth]
+      summary: Login
       security: []
       requestBody:
         required: true
@@ -32,265 +81,184 @@ paths:
             schema:
               $ref: '#/components/schemas/Login'
       responses:
-        "200": { description: Login successful }
+        200:
+          description: Login successful
 
   /auth/register:
     post:
+      tags: [Auth]
       summary: Register user
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterUser'
       responses:
-        "201": { description: User created }
+        201:
+          description: User created
 
-  ################ USERS ################
+  /hospitals:
+    post:
+      tags: [Hospitals]
+      summary: Create hospital
+
   /users:
     get:
-      summary: Get all users
-      responses:
-        "200": { description: Users list }
+      tags: [Users]
+      summary: Get users
     post:
+      tags: [Users]
       summary: Create user
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterUser'
-      responses:
-        "201": { description: Created }
 
-  ################ PATIENTS ################
   /patients:
     get:
-      summary: Get all patients
-      responses:
-        "200": { description: List }
+      tags: [Patients]
+      summary: Get patients
     post:
+      tags: [Patients]
       summary: Create patient
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/Patient'
-      responses:
-        "201": { description: Created }
 
-  ################ VISITS ################
   /visits:
     get:
+      tags: [Visits]
       summary: Get visits
-      responses:
-        "200": { description: List }
     post:
+      tags: [Visits]
       summary: Create visit
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/Visit'
-      responses:
-        "201": { description: Created }
 
-  ################ TRIAGE ################
-  /triages:
+  /triage:
     post:
-      summary: Create triage
+      tags: [Triage]
+      summary: Record patient vitals
       requestBody:
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/Triage'
-      responses:
-        "201": { description: Created }
 
-  ################ MEDICAL RECORD ################
-  /medical-records:
-    post:
-      summary: Create medical record
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MedicalRecord'
-      responses:
-        "201": { description: Created }
-    get:
-      summary: Get medical records
-      responses:
-        "200": { description: List }
-
-  ################ DIAGNOSIS ################
   /diagnoses:
     post:
-      summary: Create diagnosis
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Diagnosis'
-      responses:
-        "201": { description: Created }
+      tags: [Diagnoses]
+      summary: Add diagnosis
 
-  ################ LAB ORDERS ################
   /lab-orders:
     post:
+      tags: [Lab Orders]
       summary: Create lab order
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LabOrder'
-      responses:
-        "201": { description: Created }
 
-  ################ LAB RESULTS ################
   /lab-results:
     post:
+      tags: [Lab Results]
       summary: Add lab result
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LabResult'
-      responses:
-        "201": { description: Result saved }
 
-  ################ PRESCRIPTIONS ################
   /prescriptions:
     post:
+      tags: [Prescriptions]
       summary: Create prescription
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Prescription'
-      responses:
-        "201": { description: Created }
 
-  ################ DISPENSE ################
-  /dispensations:
+  /dispenses:
     post:
+      tags: [Pharmacy]
       summary: Dispense medication
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Dispense'
-      responses:
-        "201": { description: Dispensed }
 
-  ################ MATERNITY ################
-  /maternity:
-    post:
-      summary: Create maternity record
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Maternity'
-      responses:
-        "201": { description: Created }
-
-  ################ UNITS ################
-  /units:
+  /medications:
     get:
-      summary: Get hospital units
-      responses:
-        "200": { description: List }
+      tags: [Medications]
+      summary: Get medications
 
-  ################ BEDS ################
+  /billing:
+    post:
+      tags: [Billing]
+      summary: Create billing charge
+
+  /payments:
+    post:
+      tags: [Payments]
+      summary: Process payment
+
+  /claim:
+    post:
+      tags: [Insurance]
+      summary: Submit insurance claim
+
   /beds:
     get:
+      tags: [Beds]
       summary: Get beds
-      responses:
-        "200": { description: List }
 
-  ################ ADMISSIONS ################
   /admissions:
     post:
+      tags: [Admissions]
       summary: Admit patient
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Admission'
-      responses:
-        "201": { description: Admitted }
 
-  ################ DISCHARGES ################
   /discharges:
     post:
+      tags: [Discharges]
       summary: Discharge patient
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Discharge'
-      responses:
-        "201": { description: Discharged }
 
-  ################ BILLING ################
-  /billing/charges:
+  /appointments:
     post:
-      summary: Add charge
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Charge'
-      responses:
-        "201": { description: Charge created }
+      tags: [Appointments]
+      summary: Book appointment
 
-  ################ PAYMENTS ################
-  /payments/checkout:
+  /maternity/antenatal:
     post:
-      summary: Create Stripe checkout session
-      security: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PaymentCheckout'
-      responses:
-        "201": { description: Session created }
+      tags: [Antenatal]
+      summary: Record antenatal visit
 
-  ################ CLAIMS ################
-  /claims/{invoiceId}:
+  /maternity/delivery:
     post:
-      summary: Submit insurance claim
-      parameters:
-        - in: path
-          name: invoiceId
-          required: true
-          schema: { type: string }
-      responses:
-        "201": { description: Claim submitted }
+      tags: [Delivery]
+      summary: Record delivery
 
-  ################ QUEUE ################
+  /maternity/postnatal:
+    post:
+      tags: [Postnatal]
+      summary: Record postnatal visit
+
+  /maternity/abortion:
+    post:
+      tags: [Abortion]
+      summary: Record abortion case
+
+  /referrals:
+    post:
+      tags: [Referrals]
+      summary: Refer patient
+
   /queue:
     post:
-      summary: Add to queue
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/QueueEntry'
-      responses:
-        "201": { description: Added }
+      tags: [Queue]
+      summary: Add patient to queue
 
-  ################ AUDIT ################
-  /audit-logs:
+  /audit:
     get:
+      tags: [Audit Logs]
       summary: Get audit logs
-      responses:
-        "200": { description: List }
 
-############################################
+  /analytics:
+    get:
+      tags: [Analytics]
+      summary: Get system analytics
+
+  /reporting:
+    get:
+      tags: [Reporting]
+      summary: Generate reports
+
+########################################
 # COMPONENTS
-############################################
+########################################
 
 components:
 
@@ -304,113 +272,140 @@ components:
 
     Login:
       type: object
-      required: [email, password]
+      required:
+        - email
+        - password
       properties:
-        email: { type: string }
-        password: { type: string }
+        email:
+          type: string
+        password:
+          type: string
 
     RegisterUser:
       type: object
-      required: [name, email, password]
+      required:
+        - name
+        - email
+        - password
       properties:
-        name: { type: string }
-        email: { type: string }
-        password: { type: string }
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
 
     Patient:
       type: object
       properties:
-        name: { type: string }
-        phone: { type: string }
+        firstName:
+          type: string
+        lastName:
+          type: string
+        gender:
+          type: string
+          enum: [male, female]
+        phone:
+          type: string
+        email:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
 
     Visit:
       type: object
       properties:
-        patientId: { type: string }
-        reason: { type: string }
+        patient:
+          type: string
+        doctor:
+          type: string
+        visitDate:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum:
+            - outpatient
+            - inpatient
+            - emergency
+        notes:
+          type: string
 
     Triage:
       type: object
       properties:
-        visit: { type: string }
-        complaint: { type: string }
+        visit:
+          type: string
+        temperature:
+          type: number
+        bloodPressure:
+          type: string
+        heartRate:
+          type: number
+        oxygenSaturation:
+          type: number
+        complaint:
+          type: string
 
-    MedicalRecord:
+    Medication:
       type: object
       properties:
-        patientId: { type: string }
-        history: { type: string }
-        allergies: { type: string }
-
-    Diagnosis:
-      type: object
-      properties:
-        visit: { type: string }
-        diagnosedBy: { type: string }
-        symptoms: { type: string }
-        diagnosis: { type: string }
-
-    LabOrder:
-      type: object
-      properties:
-        diagnosis: { type: string }
-        tests:
-          type: array
-          items: { type: string }
-
-    LabResult:
-      type: object
-      properties:
-        labOrderId: { type: string }
-        result: { type: string }
-        normalRange: { type: string }
+        name:
+          type: string
+        strength:
+          type: string
+        form:
+          type: string
+        stock:
+          type: number
 
     Prescription:
       type: object
       properties:
-        visit: { type: string }
-
-    Dispense:
-      type: object
-      properties:
-        prescriptionId: { type: string }
-        dispensedBy: { type: string }
-
-    Maternity:
-      type: object
-      properties:
-        patientId: { type: string }
-        gravida: { type: number }
-        para: { type: number }
-        expectedDeliveryDate:
+        visit:
           type: string
-          format: date
+        medications:
+          type: array
+          items:
+            type: object
+            properties:
+              medication:
+                type: string
+              dosage:
+                type: string
+              frequency:
+                type: string
+              duration:
+                type: string
 
-    Admission:
+    Billing:
       type: object
       properties:
-        patientId: { type: string }
-        ward: { type: string }
+        patient:
+          type: string
+        amount:
+          type: number
+        description:
+          type: string
+        status:
+          type: string
+          enum:
+            - pending
+            - paid
 
-    Discharge:
+    InsuranceClaim:
       type: object
       properties:
-        patientId: { type: string }
-
-    Charge:
-      type: object
-      properties:
-        patientId: { type: string }
-        amount: { type: number }
-
-    PaymentCheckout:
-      type: object
-      properties:
-        patientId: { type: string }
-        amount: { type: number }
-
-    QueueEntry:
-      type: object
-      properties:
-        patientId: { type: string }
-        priority: { type: string }
+        patient:
+          type: string
+        provider:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+          enum:
+            - submitted
+            - approved
+            - rejected
