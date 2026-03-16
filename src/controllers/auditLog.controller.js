@@ -1,4 +1,4 @@
-const AuditLogModel = require("../models/AuditLog");
+const AuditLog = require("../models/AuditLog");
 
 /**
  * GET ALL LOGS (paginated + filtered)
@@ -26,9 +26,9 @@ const getAuditLogs = async (req, res, next) => {
       if (toDate) filter.createdAt.$lte = new Date(toDate);
     }
 
-    const total = await AuditLogModel.countDocuments(filter);
+    const total = await AuditLog.countDocuments(filter);
 
-    const logs = await AuditLogModel.find(filter)
+    const logs = await AuditLog.find(filter)
       .populate("user", "name email role")
       .sort({ createdAt: -1 })
       .skip(skip)

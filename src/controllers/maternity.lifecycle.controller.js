@@ -4,7 +4,7 @@ const PostnatalVisitModel = require("../models/PostnatalVisit");
 const DeliveryModel = require("../models/Delivery");
 const ReferralModel = require("../models/Referral");
 const clearCSVCache = require("../utils/invalidationCache");
-const logAudit = require("../models/AuditLog");
+const logAudit = require("../utils/logAudit");
 
 // Multi-tenant query helper
 const withHospital = (req, query = {}) => ({
@@ -43,8 +43,9 @@ const createAbortion = async (req, res, next) => {
       });
 
     // Create abortion (ONLY ONCE)
+    const { hospital, ...safeBody } = req.body;
     const abortion = await AbortionModel.create({
-      ...req.body,
+      ...safeBody,
       hospital: req.user.hospital,
     });
 
@@ -57,15 +58,16 @@ const createAbortion = async (req, res, next) => {
 
     // Audit
     await logAudit({
-      userId: req.user.id,
-      action: "CREATE_ABORTION",
-      entity: "Abortion",
-      entityId: abortion._id,
-      metadata: {
-        pregnancy: pregnancyId,
-        gestationalAgeWeeks: abortion.gestationalAgeWeeks,
-      },
-    });
+  hospitalId: req.user.hospital,
+  userId: req.user.id,
+  action: "CREATE_ABORTION",
+  entity: "Abortion",
+  entityId: abortion._id,
+  metadata: {
+    pregnancy: pregnancyId,
+    abortionDate: abortion.date
+  }
+});
 
     res.status(201).json({
       success: true,
@@ -154,20 +156,26 @@ const createPostnatalVisit = async (req, res, next) => {
         message: "Postnatal visits allowed only after delivery",
       });
 
+      const { hospital, ...safeBody } = req.body;
+
     const visit = await PostnatalVisitModel.create({
-      ...req.body,
+      ...safeBody,
       hospital: req.user.hospital,
     });
 
-    await clearCSVCache("postnatal", req.user.hospital,);
+    await clearCSVCache("postnatal", req.user.hospital);
 
-    await logAudit({
-      userId: req.user.id,
-      action: "CREATE_POSTNATAL_VISIT",
-      entity: "PostnatalVisit",
-      entityId: visit._id,
-      metadata: { pregnancy: pregnancyId, visitDate: visit.visitDate },
-    });
+   await logAudit({
+  hospitalId: req.user.hospital,
+  userId: req.user.id,
+  action: "CREATE_POSTNATAL_VISIT",
+  entity: "PostnatalVisit",
+  entityId: visit._id,
+  metadata: {
+    pregnancy: pregnancyId,
+    visitDate: visit.visitDate
+  }
+});
 
     res.status(201).json({
       success: true,
@@ -228,8 +236,10 @@ const createReferral = async (req, res, next) => {
     if (!pregnancy)
       return res.status(404).json({ message: "Pregnancy not found" });
 
+    const { hospital, ...safeBody } = req.body;
+
     const referral = await ReferralModel.create({
-      ...req.body,
+      ...safeBody,
       hospital: req.user.hospital,
     });
 
@@ -238,14 +248,19 @@ const createReferral = async (req, res, next) => {
       await pregnancy.save();
     }
 
-    await clearCSVCache("referrals", req.user.hospital,);
+    await clearCSVCache("referrals", req.user.hospital);
 
     await logAudit({
-      userId: req.user.id,
-      action: "CREATE_REFERRAL",
-      entity: "Referral",
-      entityId: referral._id,
-    });
+  hospitalId: req.user.hospital,
+  userId: req.user.id,
+  action: "CREATE_REFERRAL",
+  entity: "Referral",
+  entityId: referral._id,
+  metadata: {
+    pregnancy: pregnancyId,
+    referredTo: referral.referredTo
+  }
+});
 
     res.status(201).json({
       success: true,

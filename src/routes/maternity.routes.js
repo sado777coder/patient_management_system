@@ -25,6 +25,7 @@ const {
   createDelivery,
   getDeliveries,
   getDeliveryById,
+  getPregnancyTimeline,
   getPregnancySummary
 } = require("../controllers/maternity.controller");
 
@@ -83,6 +84,12 @@ router.get("/deliveries",
    router.get("/deliveries/:id",
   allowRoles(permissions.MATERNITY),
    getDeliveryById);
+
+   router.get(
+  "/pregnancies/:id/timeline",
+   allowRoles(permissions.MATERNITY),
+  getPregnancyTimeline
+);
 
 router.get(
   "/pregnancies/:id/summary",

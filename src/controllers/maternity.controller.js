@@ -6,7 +6,7 @@ const AbortionModel = require("../models/Abortion");
 const ReferralModel = require("../models/Referral");
 const PatientModel = require("../models/Patient");
 const clearCSVCache = require("../utils/invalidationCache");
-const logAudit = require("../models/AuditLog");
+const logAudit = require("../utils/logAudit");
 
 /* ================================
    MULTI-TENANT QUERY HELPER
@@ -239,12 +239,18 @@ const createDelivery = async (req, res, next) => {
 
     await clearCSVCache("deliveries", req.user.hospital);
 
-    await logAudit({
-      userId: req.user.id,
-      action: "CREATE_DELIVERY",
-      entity: "Delivery",
-      entityId: delivery._id,
-    });
+   await logAudit({
+  hospitalId: req.user.hospital,
+  userId: req.user.id,
+  action: "CREATE_DELIVERY",
+  entity: "Delivery",
+  entityId: delivery._id,
+  metadata: {
+    pregnancy: pregnancyId,
+    deliveryDate: delivery.deliveryDate,
+    type: delivery.type,
+  }
+});
 
     res.status(201).json({
       success: true,
@@ -311,6 +317,122 @@ const getDeliveryById = async (req, res, next) => {
 };
 
 /* ================================
+   PREGNANCY TIMELINE
+================================ */
+const getPregnancyTimeline = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const pregnancy = await PregnancyModel.findOne(
+      withHospital(req, { _id: id })
+    ).populate("patient");
+
+    if (!pregnancy)
+      return res.status(404).json({ message: "Pregnancy not found" });
+
+    const [
+      antenatalVisits,
+      referrals,
+      delivery,
+      abortion,
+      postnatalVisits
+    ] = await Promise.all([
+      AntenatalVisitModel.find(withHospital(req, { pregnancy: id })),
+      ReferralModel.find(withHospital(req, { pregnancy: id })),
+      DeliveryModel.findOne(withHospital(req, { pregnancy: id })),
+      AbortionModel.findOne(withHospital(req, { pregnancy: id })),
+      PostnatalVisitModel.find(withHospital(req, { pregnancy: id }))
+    ]);
+
+    const timeline = [];
+
+    // Pregnancy created
+    timeline.push({
+      event: "Pregnancy Registered",
+      date: pregnancy.createdAt,
+      details: {
+        gravida: pregnancy.gravida,
+        para: pregnancy.para
+      }
+    });
+
+    // Antenatal visits
+    antenatalVisits.forEach(v => {
+      timeline.push({
+        event: "Antenatal Visit",
+        date: v.visitDate,
+        details: {
+          bloodPressure: v.bloodPressure,
+          weight: v.weight
+        }
+      });
+    });
+
+    // Referrals
+    referrals.forEach(r => {
+      timeline.push({
+        event: "Referral",
+        date: r.referralDate,
+        details: {
+          referredTo: r.referredTo,
+          reason: r.reason
+        }
+      });
+    });
+
+    // Delivery
+    if (delivery) {
+      timeline.push({
+        event: "Delivery",
+        date: delivery.deliveryDate,
+        details: {
+          type: delivery.type,
+          outcome: delivery.outcome
+        }
+      });
+    }
+
+    // Abortion
+    if (abortion) {
+      timeline.push({
+        event: "Abortion",
+        date: abortion.date,
+        details: {
+          reason: abortion.reason
+        }
+      });
+    }
+
+    // Postnatal visits
+    postnatalVisits.forEach(v => {
+      timeline.push({
+        event: "Postnatal Visit",
+        date: v.visitDate,
+        details: {
+          notes: v.notes
+        }
+      });
+    });
+
+    // Sort timeline
+    timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    res.status(200).json({
+      success: true,
+      pregnancy: {
+        id: pregnancy._id,
+        patient: pregnancy.patient,
+        status: pregnancy.status
+      },
+      timeline
+    });
+
+  } catch (err) {
+    next(err);
+  }
+};
+
+/* ================================
    PREGNANCY SUMMARY
 ================================ */
 const getPregnancySummary = async (req, res, next) => {
@@ -363,5 +485,6 @@ module.exports = {
   createDelivery,
   getDeliveries,
   getDeliveryById,
+  getPregnancyTimeline,
   getPregnancySummary,
 };

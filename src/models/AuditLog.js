@@ -1,17 +1,37 @@
-const AuditLog = require("../models/AuditLog");
+const mongoose = require("mongoose");
 
-const logAudit = async ({ userId, action, entity, entityId, metadata }) => {
-  try {
-    await AuditLog.create({
-      user: userId,
-      action,
-      entity,
-      entityId,
-      metadata,
-    });
-  } catch (err) {
-    console.error("Audit log failed:", err.message);
-  }
-};
+const auditLogSchema = new mongoose.Schema(
+  {
+    hospital: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hospital",
+      required: true,
+    },
 
-module.exports = logAudit;
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    action: {
+      type: String,
+      required: true,
+    },
+
+    entity: {
+      type: String,
+      required: true,
+    },
+
+    entityId: {
+      type: mongoose.Schema.Types.ObjectId,
+    },
+
+    metadata: {
+      type: Object,
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("AuditLog", auditLogSchema);
