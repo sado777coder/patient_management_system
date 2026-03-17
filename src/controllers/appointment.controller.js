@@ -27,7 +27,7 @@ const createAppointment = async (req, res, next) => {
  */
 const getAppointments = async (req, res, next) => {
   try {
-    const hospitalId = req.user.hospital;
+    const hospital = req.user.hospital;
 
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -35,7 +35,8 @@ const getAppointments = async (req, res, next) => {
 
     const { patient, doctor, status, fromDate, toDate } = req.query;
 
-    const filter = { hospital: req.user.hospital };
+    // Base filter
+    const filter = { hospital };
 
     if (patient) filter.patient = patient;
     if (doctor) filter.doctor = doctor;
@@ -43,17 +44,24 @@ const getAppointments = async (req, res, next) => {
 
     if (fromDate || toDate) {
       filter.date = {};
-      if (fromDate) filter.date.$gte = new Date(fromDate);
-      if (toDate) filter.date.$lte = new Date(toDate);
+
+      if (fromDate) {
+        filter.date.$gte = new Date(fromDate);
+      }
+
+      if (toDate) {
+        filter.date.$lte = new Date(toDate);
+      }
     }
 
     const total = await AppointmentModel.countDocuments(filter);
 
     const appointments = await AppointmentModel.find(filter)
       .populate("patient doctor", "firstName lastName name email")
-      .sort({ date: -1 })
+      .sort({ date: -1 }) 
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -67,49 +75,29 @@ const getAppointments = async (req, res, next) => {
   }
 };
 
-
- // GET ONE
- 
+/**
+ * GET ONE
+ */
 const getAppointmentById = async (req, res, next) => {
   try {
-    const hospitalId = req.user.hospitalId;
+    const hospital = req.user.hospital;
 
     const appointment = await AppointmentModel.findOne({
       _id: req.params.id,
       hospital,
-    }).populate("patient doctor");
+    })
+      .populate("patient doctor")
+      .lean();
 
-    if (!appointment)
-      return res.status(404).json({ message: "Appointment not found" });
-
-    res.status(200).json({
-      success: true,
-      data: appointment,
-    });
-  } catch (err) {
-    next(err);
-  }
-};;
-
-
- // UPDATE
- 
-const updateAppointment = async (req, res, next) => {
-  try {
-    const hospitalId = req.user.hospitalId;
-
-    const appointment = await AppointmentModel.findOneAndUpdate(
-      { _id: req.params.id, hospital},
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!appointment)
-      return res.status(404).json({ message: "Appointment not found" });
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
 
     res.status(200).json({
       success: true,
-      message: "Updated",
       data: appointment,
     });
   } catch (err) {
@@ -117,20 +105,54 @@ const updateAppointment = async (req, res, next) => {
   }
 };
 
+/**
+ * UPDATE
+ */
+const updateAppointment = async (req, res, next) => {
+  try {
+    const hospital = req.user.hospital;
 
- // DELETE
- 
+    const appointment = await AppointmentModel.findOneAndUpdate(
+      { _id: req.params.id, hospital },
+      req.body,
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Updated successfully",
+      data: appointment,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * DELETE
+ */
 const deleteAppointment = async (req, res, next) => {
   try {
-    const hospitalId = req.user.hospitalId;
+    const hospital = req.user.hospital;
 
     const appointment = await AppointmentModel.findOneAndDelete({
       _id: req.params.id,
       hospital,
     });
 
-    if (!appointment)
-      return res.status(404).json({ message: "Appointment not found" });
+    if (!appointment) {
+      return res.status(404).json({
+        success: false,
+        message: "Appointment not found",
+      });
+    }
 
     res.status(200).json({
       success: true,

@@ -2,63 +2,57 @@ const Joi = require("joi");
 
 // CREATE APPOINTMENT
 const createAppointmentValidator = Joi.object({
-  doctorName: Joi.string()
-    .trim()
-    .required(),
+  patient: Joi.string()
+    .hex()
+    .length(24)
+    .required()
+    .messages({
+      "string.empty": "Patient is required",
+      "string.length": "Invalid patient ID",
+    }),
 
-  clinicName: Joi.string()
-    .trim()
-    .required(),
+  doctor: Joi.string()
+    .hex()
+    .length(24)
+    .required()
+    .messages({
+      "string.empty": "Doctor is required",
+      "string.length": "Invalid doctor ID",
+    }),
 
-  appointmentDateTime: Joi.date()
+  date: Joi.date()
     .iso()
     .required()
     .messages({
-      "date.base": "appointmentDateTime must be a valid date",
-      "date.format": "appointmentDateTime must be in ISO format"
+      "date.base": "Date must be valid",
+      "date.format": "Date must be in ISO format",
     }),
+
+  reason: Joi.string()
+    .trim()
+    .optional(),
 
   status: Joi.string()
     .valid("scheduled", "completed", "cancelled")
     .default("scheduled"),
-
-  notes: Joi.string()
-    .trim()
-    .optional()
 });
 
-// UPDATE APPOINTMENT (at least one field required)
+// UPDATE APPOINTMENT
 const updateAppointmentValidator = Joi.object({
-  doctorName: Joi.string()
-    .trim()
-    .optional(),
+  patient: Joi.string().hex().length(24).optional(),
 
-  clinicName: Joi.string()
-    .trim()
-    .optional(),
+  doctor: Joi.string().hex().length(24).optional(),
 
-  appointmentDateTime: Joi.date()
-    .iso()
-    .optional()
-    .messages({
-      "date.base": "appointmentDateTime must be a valid date",
-      "date.format": "appointmentDateTime must be in ISO format"
-    }),
+  date: Joi.date().iso().optional(),
+
+  reason: Joi.string().trim().optional(),
 
   status: Joi.string()
     .valid("scheduled", "completed", "cancelled")
     .optional(),
-
-  notes: Joi.string()
-    .trim()
-    .optional(),
-
-  // REQUIRED FOR REMINDERS
-  reminderSent: Joi.boolean()
-    .optional()
 }).min(1);
 
 module.exports = {
   createAppointmentValidator,
-  updateAppointmentValidator
+  updateAppointmentValidator,
 };

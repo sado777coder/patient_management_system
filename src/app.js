@@ -24,6 +24,7 @@ const maternityLifeCycleRoute = require("./routes/maternity.lifecycle.routes");
 const dispenseRoute = require("./routes/dispense.routes");
 const triageRoute = require("./routes/triage.routes");
 const bedRoute = require("./routes/bed.routes");
+const appointmentRoute = require("./routes/appointment.routes");
 const dischargeRoute = require("./routes/discharge.routes");
 const admissionRoute = require("./routes/admission.routes");
 const unitRoute = require("./routes/unit.routes");
@@ -102,6 +103,7 @@ app.use("/api/hospitals", createHospitalRoute );
 app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/patients", patientsRoute);
+app.use("/api/appointments", appointmentRoute)
 app.use("/api/units", unitRoute);
 app.use("/api/visits", visitsRoute);
 app.use("/api/diagnoses", diagnosisRoute);
