@@ -50,7 +50,7 @@ const getTriages = async (req, res, next) => {
 const updateTriage = async (req, res, next) => {
   try {
     const triage = await TriageModel.findOneAndUpdate(
-  { _id: req.params.id, hospital: req.user.hospital },
+  { _id: req.params.id, hospital: req.user.hospital , isDeleted: false,},
   req.body,
   { new: true, runValidators: true }
 );

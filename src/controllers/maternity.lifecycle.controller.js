@@ -42,6 +42,15 @@ const createAbortion = async (req, res, next) => {
         message: "Cannot record abortion for inactive pregnancy",
       });
 
+      const existingAbortion = await AbortionModel.findOne(
+  withHospital(req, { pregnancy: pregnancyId })
+);
+
+if (existingAbortion)
+  return res.status(400).json({
+    message: "Abortion already recorded for this pregnancy",
+  });
+
     // Create abortion (ONLY ONCE)
     const { hospital, ...safeBody } = req.body;
     const abortion = await AbortionModel.create({

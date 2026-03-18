@@ -24,10 +24,12 @@ const createDispense = async (req, res, next) => {
       const processedItems = [];
 
       for (const item of items) {
-        const medication = await MedicationStock.findOne({
-          _id: item.medication,
-          hospital: req.user.hospital,
-        }).session(session);
+       const medication = await MedicationStock.findOne({
+        _id: item.medication,
+        hospital: req.user.hospital,
+      })
+      .populate("medication", "name")
+      .session(session);
 
         if (!medication)
           throw new Error("Medication not found");

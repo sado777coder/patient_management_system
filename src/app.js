@@ -44,7 +44,13 @@ const app = express();
 
 // --- Security Middleware ---
 app.use(helmet());
-app.use(cors({ origin: "*" }));
+app.use(
+  cors({
+    origin: ["http://localhost:3000"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true,
+  })
+);
 app.set("trust proxy", 1);
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 app.use(morgan("combined"));
