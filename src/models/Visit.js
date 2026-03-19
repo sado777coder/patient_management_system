@@ -3,22 +3,50 @@ const mongoose = require("mongoose");
 const visitSchema = new mongoose.Schema(
   {
     hospital: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Hospital",
-  required: true,
-},
-    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
-    doctor: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hospital",
+      required: true,
+    },
 
-    visitDate: { type: Date, default: Date.now },
-    type: { type: String, enum: ["outpatient", "inpatient", "emergency"] },
+    patient: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Patient",
+      required: true,
+    },
 
-    notes: String,
+    doctor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    visitDate: {
+      type: Date,
+      default: Date.now,
+    },
+
+    type: {
+      type: String,
+      enum: ["outpatient", "inpatient", "emergency"],
+      required: true,
+    },
+
+    notes: {
+      type: String,
+    },
+
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+
+    deletedAt: {
+      type: Date,
+    },
   },
-
   { timestamps: true }
 );
- visitSchema.index({ hospital: 1, patient: 1 });
-  visitSchema.index({visitDate : 1}),
+
+visitSchema.index({ hospital: 1, patient: 1 });
+visitSchema.index({ visitDate: 1 });
 
 module.exports = mongoose.model("Visit", visitSchema);
