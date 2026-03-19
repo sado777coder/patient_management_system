@@ -70,7 +70,7 @@ const createPatientValidator = Joi.object({
     isActive: Joi.boolean().optional(),
   }).optional(),
 
-  unit: Joi.string().required(),
+  unit: Joi.string().optional(),
 });
 
 
