@@ -18,9 +18,9 @@ router.use(requireAuth);
 
 router.get("/me", getProfile);
 
-router.get("/", allowRoles(permissions.MANAGE_USERS), getUsers);
+router.get("/", getUsers);
 
-router.get("/:id", allowRoles(permissions.MANAGE_USERS), getUserById);
+router.get("/:id", getUserById);
 
 router.put("/:id", allowRoles(permissions.MANAGE_USERS), updateUser);
 
