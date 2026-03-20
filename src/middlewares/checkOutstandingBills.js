@@ -9,7 +9,8 @@ const checkOutstandingBills = async (req, res, next) => {
 
     const unpaid = await BillingModel.findOne({
       patient,
-      paymentStatus: "pending",
+      hospital: req.user.hospital,
+      balance: { $gt: 0 },
       isDeleted: false,
     });
 

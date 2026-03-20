@@ -1,9 +1,3 @@
-const Billing = require("../models/Billing"); // account
-const Ledger = require("../models/LedgerTransaction");
-const Patient = require("../models/Patient");
-
-const CONSULT_FEE = 20;
-
 const requireConsultationFee = async (req, res, next) => {
   try {
     const { patient, type } = req.body;
@@ -25,14 +19,38 @@ const requireConsultationFee = async (req, res, next) => {
     if (hasValidInsurance) return next();
 
     // get or create wallet account
-    let account = await Billing.findOne({ patient });
+    let account = await Billing.findOne({
+      patient,
+      hospital: req.user.hospital,
+    });
 
     if (!account) {
-      account = await Billing.create({ patient });
+      account = await Billing.create({
+        patient,
+        hospital: req.user.hospital,
+      });
+    }
+
+    //  NEW: Prevent duplicate charges (idempotency)
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const existingCharge = await Ledger.findOne({
+      patient,
+      hospital: req.user.hospital,
+      type: "charge",
+      description: "Outpatient Consultation Fee",
+      createdAt: { $gte: startOfDay }, // same day
+    });
+
+    if (existingCharge) {
+      // Already charged today → skip
+      return next();
     }
 
     // create immutable charge entry
     await Ledger.create({
+      hospital: req.user.hospital,
       account: account._id,
       patient,
       type: "charge",
