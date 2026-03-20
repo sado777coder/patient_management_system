@@ -5,7 +5,7 @@ const PatientModel = require("../models/Patient");
 // ================= CREATE VISIT =================
 const createVisit = async (req, res, next) => {
   try {
-    const { patient } = req.body;
+    const { patient, doctor, notes, type, visitDate } = req.body;
 
     const existingPatient = await PatientModel.findById(patient);
     if (!existingPatient)
@@ -17,17 +17,24 @@ const createVisit = async (req, res, next) => {
     if (existingPatient.hospital.toString() !== req.user.hospital.toString())
       return res.status(403).json({ message: "Unauthorized access to patient in another hospital" });
 
-    const { doctor, notes, ...rest } = req.body;
-    const visit = await VisitModel.create({
-      ...rest,
-      doctor: doctor || undefined,
-      notes: notes || undefined, 
+    //  Build clean object manually
+    const visitData = {
+      patient,
+      type,
       hospital: req.user.hospital,
       isDeleted: false,
-    });
+    };
+
+    if (visitDate) visitData.visitDate = visitDate;
+    if (doctor) visitData.doctor = doctor;
+    if (notes) visitData.notes = notes;
+
+    const visit = await VisitModel.create(visitData);
 
     res.status(201).json({ data: visit });
+
   } catch (err) {
+    console.error("CREATE VISIT ERROR:", err); 
     next(err);
   }
 };

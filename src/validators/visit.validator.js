@@ -3,7 +3,7 @@ const Joi = require("joi");
 const createVisitValidator = Joi.object({
 
   patient: Joi.string().required(),
-  doctor: Joi.string().allow("", null).optional(),
+  doctor: Joi.string().allow("", null).optional().empty(""),
 
   visitDate: Joi.date().optional(),
 
@@ -11,7 +11,7 @@ const createVisitValidator = Joi.object({
     .valid("outpatient", "inpatient", "emergency")
     .required(),
 
-  notes: Joi.string().allow("", null).optional(),
+  notes: Joi.string().allow("", null).optional().empty(""),
 });
 
 const updateVisitValidator = Joi.object({
