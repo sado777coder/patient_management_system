@@ -6,6 +6,10 @@ const BillingModel = require("../models/Billing");
 const checkOutstandingBills = async (req, res, next) => {
   try {
     const patient = req.body.patient || req.params.patientId;
+    
+    console.log("REQ BODY:", req.body);
+    console.log("PATIENT:", patient);
+    console.log("ROUTE:", req.method, req.originalUrl);
 
     const unpaid = await BillingModel.findOne({
       patient,

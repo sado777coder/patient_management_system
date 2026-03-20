@@ -1,10 +1,29 @@
+const Billing = require("../models/Billing");
+const Ledger = require("../models/LedgerTransaction");
+const Patient = require("../models/Patient"); 
+
+const CONSULT_FEE = 20;
+
 const requireConsultationFee = async (req, res, next) => {
   try {
     const { patient, type } = req.body;
 
+    console.log("REQ BODY:", req.body);
+    console.log("PATIENT:", patient);
+    console.log("ROUTE:", req.method, req.originalUrl);
+
+    if (!patient) {
+      return res.status(400).json({
+        message: "Patient is required",
+      });
+    }
+
     if (type !== "outpatient") return next();
 
-    const patientDoc = await Patient.findById(patient);
+    const patientDoc = await Patient.findOne({
+      _id: patient,
+      hospital: req.user.hospital,
+    });
 
     if (!patientDoc) {
       return res.status(404).json({ message: "Patient not found" });
@@ -18,7 +37,6 @@ const requireConsultationFee = async (req, res, next) => {
 
     if (hasValidInsurance) return next();
 
-    // get or create wallet account
     let account = await Billing.findOne({
       patient,
       hospital: req.user.hospital,
@@ -31,7 +49,7 @@ const requireConsultationFee = async (req, res, next) => {
       });
     }
 
-    //  NEW: Prevent duplicate charges (idempotency)
+    // idempotency (your logic stays intact)
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
@@ -40,15 +58,11 @@ const requireConsultationFee = async (req, res, next) => {
       hospital: req.user.hospital,
       type: "charge",
       description: "Outpatient Consultation Fee",
-      createdAt: { $gte: startOfDay }, // same day
+      createdAt: { $gte: startOfDay },
     });
 
-    if (existingCharge) {
-      // Already charged today → skip
-      return next();
-    }
+    if (existingCharge) return next();
 
-    // create immutable charge entry
     await Ledger.create({
       hospital: req.user.hospital,
       account: account._id,
@@ -57,12 +71,9 @@ const requireConsultationFee = async (req, res, next) => {
       description: "Outpatient Consultation Fee",
       amount: CONSULT_FEE,
       createdBy: req.user?._id,
-      meta: {
-        source: "consultation_auto_charge",
-      },
+      meta: { source: "consultation_auto_charge" },
     });
 
-    // update balance
     account.balance += CONSULT_FEE;
     await account.save();
 
