@@ -83,15 +83,37 @@ const createVisit = async (req, res, next) => {
 // ================= GET ALL VISITS =================
 const getVisits = async (req, res, next) => {
   try {
-    const visits = await VisitModel.find({
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 10, 100);
+    const skip = (page - 1) * limit;
+
+    const filter = {
       hospital: req.user.hospital,
       isDeleted: false,
-    })
-      .populate("patient", "firstName lastName hospitalId")
-      .populate("doctor", "name role")
-      .sort({ visitDate: -1 });
+    };
 
-    res.status(200).json({ data: visits });
+    const [visits, total] = await Promise.all([
+      VisitModel.find(filter)
+        .populate("patient", "firstName lastName")
+        .populate("doctor", "name role")
+        .sort({ visitDate: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      VisitModel.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: visits,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+      },
+    });
   } catch (err) {
     next(err);
   }
