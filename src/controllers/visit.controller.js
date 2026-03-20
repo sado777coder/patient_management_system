@@ -17,9 +17,11 @@ const createVisit = async (req, res, next) => {
     if (existingPatient.hospital.toString() !== req.user.hospital.toString())
       return res.status(403).json({ message: "Unauthorized access to patient in another hospital" });
 
+    const { doctor, notes, ...rest } = req.body;
     const visit = await VisitModel.create({
-      ...req.body,
+      ...rest,
       doctor: doctor || undefined,
+      notes: notes || undefined, 
       hospital: req.user.hospital,
       isDeleted: false,
     });
