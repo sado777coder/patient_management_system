@@ -19,6 +19,7 @@ const createVisit = async (req, res, next) => {
 
     const visit = await VisitModel.create({
       ...req.body,
+      doctor: doctor || undefined,
       hospital: req.user.hospital,
       isDeleted: false,
     });
