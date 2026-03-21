@@ -27,17 +27,75 @@ const createTriage = async (req, res, next) => {
  */
 const getTriages = async (req, res, next) => {
   try {
-    const triages = await TriageModel.find({
-  hospital: req.user.hospital,
-  isDeleted: false,
-})
-.populate("visit triagedBy", "name role")
-.sort({ createdAt: -1 });
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 10, 100);
+    const skip = (page - 1) * limit;
+
+    const filter = {
+      hospital: req.user.hospital,
+      isDeleted: false,
+    };
+
+    const [triages, total] = await Promise.all([
+      TriageModel.find(filter)
+        .populate({
+          path: "visit",
+          populate: {
+            path: "patient",
+            select: "firstName lastName",
+          },
+        })
+        .populate("triagedBy", "name role")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      TriageModel.countDocuments(filter),
+    ]);
 
     res.status(200).json({
-      success:true,
-      message:"Available records",
-       data: triages });
+      success: true,
+      data: triages,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const getTriageById = async (req, res, next) => {
+  try {
+    const triage = await TriageModel.findOne({
+      _id: req.params.id,
+      hospital: req.user.hospital,
+      isDeleted: false,
+    })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("triagedBy", "name role");
+
+    if (!triage) {
+      return res.status(404).json({
+        success: false,
+        message: "Triage not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: triage,
+    });
   } catch (err) {
     next(err);
   }
@@ -97,6 +155,7 @@ const deleteTriage = async (req, res, next) => {
 module.exports = {
   createTriage,
   getTriages,
+  getTriageById,
   updateTriage,
   deleteTriage,
 }

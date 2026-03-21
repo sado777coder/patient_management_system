@@ -8,6 +8,7 @@ const validate = require("../middlewares/validate");
 const {
   createTriage,
   getTriages,
+  getTriageById,
   updateTriage,
   deleteTriage,
 } = require("../controllers/triage.controller");
@@ -27,6 +28,8 @@ router.post(
 );
 
 router.get("/", getTriages);
+
+router.get("/:id", getTriageById);
 
 router.put(
   "/:id",
