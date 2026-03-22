@@ -19,7 +19,10 @@ const createDiagnosis = async (req, res, next) => {
     }
 
     // CHECK IF DIAGNOSIS ALREADY EXISTS
-    const existingDiagnosis = await Diagnosis.findOne({ visit });
+    const existingDiagnosis = await Diagnosis.findOne({
+       visit,
+       hospital: req.user.hospital,
+       });
 
     if (existingDiagnosis) {
       return res.status(400).json({
@@ -29,16 +32,27 @@ const createDiagnosis = async (req, res, next) => {
     }
 
     const diagnosis = await Diagnosis.create({
-      ...req.body,
-      hospital: req.user.hospital,
-      diagnosedBy: req.user._id,
-    });
+  ...req.body,
+  hospital: req.user.hospital,
+  diagnosedBy: req.user._id,
+});
 
-    res.status(201).json({
-      success: true,
-      message: "Diagnosis created",
-      data: diagnosis,
-    });
+const populatedDiagnosis = await Diagnosis.findById(diagnosis._id)
+  .populate({
+    path: "visit",
+    populate: {
+      path: "patient",
+      select: "firstName lastName",
+    },
+  })
+  .populate("diagnosedBy", "name email")
+  .lean();
+
+res.status(201).json({
+  success: true,
+  message: "Diagnosis created",
+  data: populatedDiagnosis,
+});
 
   } catch (error) {
     next(error);
