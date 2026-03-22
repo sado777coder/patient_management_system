@@ -66,6 +66,7 @@ const getPatients = async (req, res, next) => {
     const [patients, total] = await Promise.all([
       PatientModel.find(filter)
         .populate("unit", "name code")
+        .populate("createdBy", "name role")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
