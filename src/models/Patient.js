@@ -97,7 +97,7 @@ patientSchema.index(
 
 patientSchema.index(
   { hospital: 1, phone: 1 },
-  { unique: true, partialFilterExpression: { phone: { $exists: true } } }
+  { unique: true, partialFilterExpression: { phone: { $type: "string", $ne: "" } } }
 );
 
 patientSchema.index({hospital: 1, isDeleted: 1, unit: 1, createdAt: -1 });
