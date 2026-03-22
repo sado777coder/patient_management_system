@@ -250,7 +250,9 @@ const searchPatients = async (req, res, next) => {
       });
     }
 
-    const cacheKey = `patient-search:${req.user.hospital}:${keyword}`;
+    const normalized = keyword.toLowerCase();
+
+    const cacheKey = `patient-search:${req.user.hospital}:${normalized}`;
     const cached = await redis.get(cacheKey);
 
     if (cached) {
@@ -262,21 +264,42 @@ const searchPatients = async (req, res, next) => {
       });
     }
 
-    const isObjectId = mongoose.Types.ObjectId.isValid(keyword);
-
-    const patients = await PatientModel.find({
+    // BASE FILTER
+    let filter = {
       hospital: req.user.hospital,
       isDeleted: false,
       $or: [
-        { $text: { $search: keyword } }, // full-text search
-        { firstName: { $regex: keyword, $options: "i" } },
-        { lastName: { $regex: keyword, $options: "i" } },
-        { phone: { $regex: keyword, $options: "i" } },
-        { email: { $regex: keyword, $options: "i" } },
-        { registrationNumber: { $regex: keyword, $options: "i" } },
-        ...(isObjectId ? [{ _id: keyword }] : [])
+        { firstName: { $regex: normalized, $options: "i" } },
+        { lastName: { $regex: normalized, $options: "i" } },
+        { phone: { $regex: normalized, $options: "i" } },
+        { email: { $regex: normalized, $options: "i" } },
+
+        //  Patient ID search
+        {
+          registrationNumber: {
+            $regex: normalized.replace(/\s/g, ""),
+            $options: "i"
+          }
+        }
       ]
-    })
+    };
+
+    //  PRIORITY MATCH (exact patient ID)
+    if (
+      normalized.startsWith("pat-") ||
+      normalized.startsWith("gh-")
+    ) {
+      filter.$or.unshift({
+        registrationNumber: normalized.toUpperCase()
+      });
+    }
+
+    // OBJECT ID 
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      filter.$or.unshift({ _id: keyword });
+    }
+
+    const patients = await PatientModel.find(filter)
       .populate("unit", "name code")
       .populate("createdBy", "name role")
       .sort({ createdAt: -1 })
