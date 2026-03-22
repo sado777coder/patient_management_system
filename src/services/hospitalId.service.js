@@ -7,7 +7,6 @@ const Counter = require("../models/Counter");
 const generateHospitalId = async (hospitalId) => {
   const year = new Date().getFullYear();
 
-  // atomic increment, hospital-specific
   const counter = await Counter.findOneAndUpdate(
     { hospital: hospitalId, name: `patient-${year}` },
     { $inc: { seq: 1 } },
@@ -16,7 +15,7 @@ const generateHospitalId = async (hospitalId) => {
 
   const padded = String(counter.seq).padStart(6, "0");
 
-  return `GH-${year}-${padded}`;
+  return `PAT-${year}-${padded}`; 
 };
 
 module.exports = generateHospitalId;

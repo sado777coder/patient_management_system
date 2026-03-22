@@ -262,34 +262,27 @@ const searchPatients = async (req, res, next) => {
       });
     }
 
-    // SMART FILTER
-    let filter = {
+    const isObjectId = mongoose.Types.ObjectId.isValid(keyword);
+
+    const patients = await PatientModel.find({
       hospital: req.user.hospital,
       isDeleted: false,
       $or: [
+        { $text: { $search: keyword } }, // full-text search
         { firstName: { $regex: keyword, $options: "i" } },
         { lastName: { $regex: keyword, $options: "i" } },
         { phone: { $regex: keyword, $options: "i" } },
         { email: { $regex: keyword, $options: "i" } },
+        { registrationNumber: { $regex: keyword, $options: "i" } },
+        ...(isObjectId ? [{ _id: keyword }] : [])
       ]
-    };
-
-    //  OBJECT ID SEARCH
-    if (mongoose.Types.ObjectId.isValid(keyword)) {
-      filter.$or.push({ _id: keyword });
-    }
-
-    //  REGISTRATION NUMBER
-    filter.$or.push({ registrationNumber: { $regex: keyword, $options: "i" } });
-
-    const patients = await PatientModel.find(filter)
+    })
       .populate("unit", "name code")
       .populate("createdBy", "name role")
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
 
-    // Cache result
     await redis.set(cacheKey, JSON.stringify(patients), "EX", 30);
 
     res.status(200).json({
