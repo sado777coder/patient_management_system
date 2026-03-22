@@ -70,13 +70,19 @@ const getAllDiagnoses = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const diagnoses = await Diagnosis.find({
-      hospital: req.user.hospital,
-    })
-      .populate("visit")
-      .populate("diagnosedBy", "name email")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+  hospital: req.user.hospital,
+})
+  .populate({
+    path: "visit",
+    populate: {
+      path: "patient",
+      select: "firstName lastName",
+    },
+  })
+  .populate("diagnosedBy", "name email")
+  .sort({ createdAt: -1 })
+  .skip(skip)
+  .limit(limit);
 
     const total = await Diagnosis.countDocuments({
       hospital: req.user.hospital,
@@ -99,11 +105,17 @@ const getAllDiagnoses = async (req, res, next) => {
 const getDiagnosis = async (req, res, next) => {
   try {
     const diagnosis = await Diagnosis.findOne({
-      _id: req.params.id,
-      hospital: req.user.hospital,
-    })
-      .populate("visit")
-      .populate("diagnosedBy", "name email");
+  _id: req.params.id,
+  hospital: req.user.hospital,
+})
+  .populate({
+    path: "visit",
+    populate: {
+      path: "patient",
+      select: "firstName lastName",
+    },
+  })
+  .populate("diagnosedBy", "name email");
 
     if (!diagnosis)
       return res.status(404).json({ message: "Diagnosis not found" });
