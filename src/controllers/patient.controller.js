@@ -242,6 +242,7 @@ const deletePatient = async (req, res, next) => {
 const searchPatients = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
+
     if (!keyword) {
       return res.status(400).json({
         success: false,
@@ -251,6 +252,7 @@ const searchPatients = async (req, res, next) => {
 
     const cacheKey = `patient-search:${req.user.hospital}:${keyword}`;
     const cached = await redis.get(cacheKey);
+
     if (cached) {
       return res.status(200).json({
         success: true,
@@ -260,20 +262,34 @@ const searchPatients = async (req, res, next) => {
       });
     }
 
-    const patients = await PatientModel.find(
-      {
-        hospital: req.user.hospital,
-        isDeleted: false,
-        $text: { $search: keyword }
-      },
-      { score: { $meta: "textScore" } }
-    )
-      .sort({ score: { $meta: "textScore" } })
+    // SMART FILTER
+    let filter = {
+      hospital: req.user.hospital,
+      isDeleted: false,
+      $or: [
+        { firstName: { $regex: keyword, $options: "i" } },
+        { lastName: { $regex: keyword, $options: "i" } },
+        { phone: { $regex: keyword, $options: "i" } },
+        { email: { $regex: keyword, $options: "i" } },
+      ]
+    };
+
+    //  OBJECT ID SEARCH
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      filter.$or.push({ _id: keyword });
+    }
+
+    //  REGISTRATION NUMBER
+    filter.$or.push({ registrationNumber: { $regex: keyword, $options: "i" } });
+
+    const patients = await PatientModel.find(filter)
       .populate("unit", "name code")
+      .populate("createdBy", "name role")
+      .sort({ createdAt: -1 })
       .limit(20)
       .lean();
 
-    // Cache search results for 30 seconds
+    // Cache result
     await redis.set(cacheKey, JSON.stringify(patients), "EX", 30);
 
     res.status(200).json({

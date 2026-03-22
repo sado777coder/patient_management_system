@@ -106,6 +106,7 @@ patientSchema.index({
   firstName: "text",
   lastName: "text",
   phone: "text",
+  email: "text",
   registrationNumber: "text"
 });
 
