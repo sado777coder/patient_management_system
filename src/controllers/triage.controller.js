@@ -101,6 +101,42 @@ const getTriageById = async (req, res, next) => {
   }
 };
 
+// Search Triage
+const searchTriages = async (req, res, next) => {
+  try {
+    const keyword = req.query.q?.trim();
+
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query required",
+      });
+    }
+
+    const triages = await TriageModel.find({
+      hospital: req.user.hospital,
+      $or: [
+        { complaint: { $regex: keyword, $options: "i" } },
+      ],
+    })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("triagedBy", "name role")
+      .limit(20);
+
+    res.json({
+      success: true,
+      data: triages,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 /**
  * UPDATE TRIAGE
@@ -156,6 +192,7 @@ module.exports = {
   createTriage,
   getTriages,
   getTriageById,
+  searchTriages,
   updateTriage,
   deleteTriage,
 }

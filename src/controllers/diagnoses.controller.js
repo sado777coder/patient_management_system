@@ -139,6 +139,44 @@ const getVisitDiagnoses = async (req, res, next) => {
   }
 };
 
+// Search Diagnoses
+const searchDiagnoses = async (req, res, next) => {
+  try {
+    const keyword = req.query.q?.trim();
+
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query required",
+      });
+    }
+
+    const diagnoses = await Diagnosis.find({
+      hospital: req.user.hospital,
+      $or: [
+        { diagnosis: { $regex: keyword, $options: "i" } },
+        { symptoms: { $regex: keyword, $options: "i" } },
+      ],
+    })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("diagnosedBy", "name email")
+      .limit(20);
+
+    res.json({
+      success: true,
+      data: diagnoses,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // UPDATE DIAGNOSIS
 const updateDiagnosis = async (req, res, next) => {
   try {
@@ -166,5 +204,6 @@ module.exports = {
     getAllDiagnoses,
     getDiagnosis,
     getVisitDiagnoses,
+    searchDiagnoses,
     updateDiagnosis
 }

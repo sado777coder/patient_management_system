@@ -9,6 +9,7 @@ const {
   createTriage,
   getTriages,
   getTriageById,
+  searchTriages,
   updateTriage,
   deleteTriage,
 } = require("../controllers/triage.controller");
@@ -26,6 +27,8 @@ router.post(
   validate(createTriageValidator),
   createTriage
 );
+
+router.get("/search", searchTriages);
 
 router.get("/", getTriages);
 

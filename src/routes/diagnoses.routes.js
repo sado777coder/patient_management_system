@@ -8,6 +8,7 @@ const {
   getAllDiagnoses,
   getDiagnosis,
   getVisitDiagnoses,
+  searchDiagnoses,
   updateDiagnosis,
 } = require("../controllers/diagnoses.controller");
 
@@ -22,7 +23,9 @@ router.post("/",
     allowRoles(permissions.PRESCRIBE)
     ,validate(createDiagnosisValidator), createDiagnosis);
 
-   router.get("/", getAllDiagnoses);
+    router.get("/search", searchDiagnoses);
+    
+     router.get("/", getAllDiagnoses);
 
 router.get("/:id", getDiagnosis);
 router.get("/visit/:visitId", getVisitDiagnoses);

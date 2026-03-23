@@ -114,7 +114,9 @@ const getPatientById = async (req, res, next) => {
       _id: req.params.id,
       hospital: req.user.hospital,
       isDeleted: false
-    }).populate("unit", "name code").lean();
+    }).populate("unit", "name code")
+    .populate("createdBy", "name role")
+    .lean();
 
     if (!patient) {
       return res.status(404).json({
