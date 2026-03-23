@@ -3,12 +3,9 @@ const PatientModel = require("../models/Patient");
 const redis = require("../config/redis");
 const { invalidatePatient } = require("../utils/cacheInvalidation");
 
-
- // CREATE PATIENT
-
+// CREATE PATIENT
 const createPatient = async (req, res, next) => {
   try {
-    // Ensure the user is associated with a hospital
     if (!req.user.hospital) {
       return res.status(400).json({
         success: false,
@@ -16,12 +13,9 @@ const createPatient = async (req, res, next) => {
       });
     }
 
-    const hospital = req.user.hospital;
-
-    // Attempt to create patient
     const patient = await PatientModel.create({
       ...req.body,
-      hospital,
+      hospital: req.user.hospital,
       createdBy: req.user._id,
     });
 
@@ -30,28 +24,23 @@ const createPatient = async (req, res, next) => {
       message: "Patient created successfully",
       data: patient,
     });
-
   } catch (err) {
-  console.log("Mongo error:", err);
+    console.log("Mongo error:", err);
 
-  if (err.code === 11000) {
-    const duplicateField = Object.keys(err.keyPattern || {});
-    console.log("Duplicate fields:", duplicateField);
+    if (err.code === 11000) {
+      const duplicateField = Object.keys(err.keyPattern || {});
+      return res.status(400).json({
+        success: false,
+        message: "Duplicate detected",
+        fields: duplicateField,
+      });
+    }
 
-    return res.status(400).json({
-      success: false,
-      message: `Duplicate detected`,
-      fields: duplicateField
-    });
+    next(err);
   }
-
-  next(err);
-}
 };
 
-/**
- * GET ALL PATIENTS (PAGINATED)
- */
+// GET ALL PATIENTS
 const getPatients = async (req, res, next) => {
   try {
     const page = Math.max(Number(req.query.page) || 1, 1);
@@ -60,7 +49,7 @@ const getPatients = async (req, res, next) => {
 
     const filter = {
       hospital: req.user.hospital,
-      isDeleted: false
+      isDeleted: false,
     };
 
     const [patients, total] = await Promise.all([
@@ -71,8 +60,7 @@ const getPatients = async (req, res, next) => {
         .skip(skip)
         .limit(limit)
         .lean(),
-
-      PatientModel.countDocuments(filter)
+      PatientModel.countDocuments(filter),
     ]);
 
     res.status(200).json({
@@ -83,164 +71,143 @@ const getPatients = async (req, res, next) => {
         total,
         page,
         pages: Math.ceil(total / limit),
-        limit
-      }
+        limit,
+      },
     });
-
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * GET SINGLE PATIENT (with Redis caching)
- */
+// GET PATIENT BY ID (CACHE)
 const getPatientById = async (req, res, next) => {
   try {
     const cacheKey = `patient:${req.user.hospital}:${req.params.id}`;
 
-    // Check cache
     const cached = await redis.get(cacheKey);
     if (cached) {
       return res.status(200).json({
         success: true,
         source: "cache",
-        data: JSON.parse(cached)
+        data: JSON.parse(cached),
       });
     }
 
-    // Query database
     const patient = await PatientModel.findOne({
       _id: req.params.id,
       hospital: req.user.hospital,
-      isDeleted: false
-    }).populate("unit", "name code")
-    .populate("createdBy", "name role")
-    .lean();
+      isDeleted: false,
+    })
+      .populate("unit", "name code")
+      .populate("createdBy", "name role")
+      .lean();
 
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found"
+        message: "Patient not found",
       });
     }
 
-    // Store in cache for 60 seconds
     await redis.set(cacheKey, JSON.stringify(patient), "EX", 60);
 
     res.status(200).json({
       success: true,
       source: "database",
-      data: patient
+      data: patient,
     });
-
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * UPDATE PATIENT
- */
+// UPDATE PATIENT
 const updatePatient = async (req, res, next) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid patient ID"
+        message: "Invalid patient ID",
       });
     }
 
-    // Protect sensitive fields
     const blockedFields = [
       "hospital",
       "registrationNumber",
       "isDeleted",
       "deletedAt",
-      "deletedBy"
+      "deletedBy",
     ];
-    blockedFields.forEach(field => delete req.body[field]);
+    blockedFields.forEach((f) => delete req.body[f]);
 
     const patient = await PatientModel.findOneAndUpdate(
       {
         _id: req.params.id,
         hospital: req.user.hospital,
-        isDeleted: false
+        isDeleted: false,
       },
-      {
-        ...req.body,
-        updatedBy: req.user._id
-      },
-      {
-        new: true,
-        runValidators: true
-      }
-    ).populate("unit", "name code").lean();
+      { ...req.body, updatedBy: req.user._id },
+      { new: true, runValidators: true }
+    )
+      .populate("unit", "name code")
+      .lean();
 
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found"
+        message: "Patient not found",
       });
     }
 
-    // Invalidate cache after update
     await invalidatePatient(`${req.user.hospital}:${patient._id}`);
 
     res.status(200).json({
       success: true,
       message: "Patient updated successfully",
-      data: patient
+      data: patient,
     });
-
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * SOFT DELETE PATIENT
- */
+// DELETE PATIENT
 const deletePatient = async (req, res, next) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid patient ID"
+        message: "Invalid patient ID",
       });
     }
 
     const patient = await PatientModel.findOne({
       _id: req.params.id,
       hospital: req.user.hospital,
-      isDeleted: false
+      isDeleted: false,
     });
 
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found"
+        message: "Patient not found",
       });
     }
 
     await patient.softDelete(req.user._id);
 
-    // Invalidate cache after deletion
     await invalidatePatient(`${req.user.hospital}:${patient._id}`);
 
     res.status(200).json({
       success: true,
-      message: "Patient archived successfully"
+      message: "Patient archived successfully",
     });
-
   } catch (err) {
     next(err);
   }
 };
 
-/**
- * SEARCH PATIENTS (with optional caching)
- */
+// SEARCH PATIENTS
 const searchPatients = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
@@ -248,25 +215,24 @@ const searchPatients = async (req, res, next) => {
     if (!keyword) {
       return res.status(400).json({
         success: false,
-        message: "Search query required"
+        message: "Search query required",
       });
     }
 
     const normalized = keyword.toLowerCase();
-
     const cacheKey = `patient-search:${req.user.hospital}:${normalized}`;
-    const cached = await redis.get(cacheKey);
 
+    const cached = await redis.get(cacheKey);
     if (cached) {
+      const parsed = JSON.parse(cached);
       return res.status(200).json({
         success: true,
         source: "cache",
-        count: JSON.parse(cached).length,
-        data: JSON.parse(cached)
+        count: parsed.length,
+        data: parsed,
       });
     }
 
-    // BASE FILTER
     let filter = {
       hospital: req.user.hospital,
       isDeleted: false,
@@ -275,28 +241,21 @@ const searchPatients = async (req, res, next) => {
         { lastName: { $regex: normalized, $options: "i" } },
         { phone: { $regex: normalized, $options: "i" } },
         { email: { $regex: normalized, $options: "i" } },
-
-        //  Patient ID search
         {
           registrationNumber: {
             $regex: normalized.replace(/\s/g, ""),
-            $options: "i"
-          }
-        }
-      ]
+            $options: "i",
+          },
+        },
+      ],
     };
 
-    //  PRIORITY MATCH (exact patient ID)
-    if (
-      normalized.startsWith("pat-") ||
-      normalized.startsWith("gh-")
-    ) {
+    if (normalized.startsWith("pat-") || normalized.startsWith("gh-")) {
       filter.$or.unshift({
-        registrationNumber: normalized.toUpperCase()
+        registrationNumber: normalized.toUpperCase(),
       });
     }
 
-    // OBJECT ID 
     if (mongoose.Types.ObjectId.isValid(keyword)) {
       filter.$or.unshift({ _id: keyword });
     }
@@ -314,9 +273,8 @@ const searchPatients = async (req, res, next) => {
       success: true,
       source: "database",
       count: patients.length,
-      data: patients
+      data: patients,
     });
-
   } catch (err) {
     next(err);
   }
@@ -328,5 +286,5 @@ module.exports = {
   getPatientById,
   updatePatient,
   deletePatient,
-  searchPatients
+  searchPatients,
 };

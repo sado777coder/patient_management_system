@@ -123,7 +123,7 @@ const searchTriages = async (req, res, next) => {
         },
       },
 
-      // JOIN VISITS
+      // VISIT
       {
         $lookup: {
           from: "visits",
@@ -134,7 +134,7 @@ const searchTriages = async (req, res, next) => {
       },
       { $unwind: "$visit" },
 
-      // JOIN PATIENTS
+      // PATIENT
       {
         $lookup: {
           from: "patients",
@@ -144,6 +144,22 @@ const searchTriages = async (req, res, next) => {
         },
       },
       { $unwind: "$patient" },
+
+      // TRIAGED BY 
+      {
+        $lookup: {
+          from: "users",
+          localField: "triagedBy",
+          foreignField: "_id",
+          as: "triagedBy",
+        },
+      },
+      {
+        $unwind: {
+          path: "$triagedBy",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
 
       // SEARCH
       {
@@ -156,15 +172,25 @@ const searchTriages = async (req, res, next) => {
         },
       },
 
-      // CLEAN RESPONSE
+      // RESPONSE FORMAT 
       {
         $project: {
           complaint: 1,
           priority: 1,
           vitals: 1,
           createdAt: 1,
-          "patient.firstName": 1,
-          "patient.lastName": 1,
+          triagedBy: {
+            _id: "$triagedBy._id",
+            name: "$triagedBy.name",
+          },
+          visit: {
+            _id: "$visit._id",
+            patient: {
+              _id: "$patient._id",
+              firstName: "$patient.firstName",
+              lastName: "$patient.lastName",
+            },
+          },
         },
       },
     ]);

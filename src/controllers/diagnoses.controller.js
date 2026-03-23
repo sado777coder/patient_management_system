@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Diagnosis = require("../models/Diagnosis");
 const Triage = require("../models/Triage");
 
@@ -20,9 +21,9 @@ const createDiagnosis = async (req, res, next) => {
 
     // CHECK IF DIAGNOSIS ALREADY EXISTS
     const existingDiagnosis = await Diagnosis.findOne({
-       visit,
-       hospital: req.user.hospital,
-       });
+      visit,
+      hospital: req.user.hospital,
+    });
 
     if (existingDiagnosis) {
       return res.status(400).json({
@@ -32,27 +33,27 @@ const createDiagnosis = async (req, res, next) => {
     }
 
     const diagnosis = await Diagnosis.create({
-  ...req.body,
-  hospital: req.user.hospital,
-  diagnosedBy: req.user._id,
-});
+      ...req.body,
+      hospital: req.user.hospital,
+      diagnosedBy: req.user._id,
+    });
 
-const populatedDiagnosis = await Diagnosis.findById(diagnosis._id)
-  .populate({
-    path: "visit",
-    populate: {
-      path: "patient",
-      select: "firstName lastName",
-    },
-  })
-  .populate("diagnosedBy", "name email")
-  .lean();
+    const populatedDiagnosis = await Diagnosis.findById(diagnosis._id)
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("diagnosedBy", "name email")
+      .lean();
 
-res.status(201).json({
-  success: true,
-  message: "Diagnosis created",
-  data: populatedDiagnosis,
-});
+    res.status(201).json({
+      success: true,
+      message: "Diagnosis created",
+      data: populatedDiagnosis,
+    });
 
   } catch (error) {
     next(error);
@@ -70,19 +71,19 @@ const getAllDiagnoses = async (req, res, next) => {
     const skip = (page - 1) * limit;
 
     const diagnoses = await Diagnosis.find({
-  hospital: req.user.hospital,
-})
-  .populate({
-    path: "visit",
-    populate: {
-      path: "patient",
-      select: "firstName lastName",
-    },
-  })
-  .populate("diagnosedBy", "name email")
-  .sort({ createdAt: -1 })
-  .skip(skip)
-  .limit(limit);
+      hospital: req.user.hospital,
+    })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("diagnosedBy", "name email")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     const total = await Diagnosis.countDocuments({
       hospital: req.user.hospital,
@@ -105,17 +106,17 @@ const getAllDiagnoses = async (req, res, next) => {
 const getDiagnosis = async (req, res, next) => {
   try {
     const diagnosis = await Diagnosis.findOne({
-  _id: req.params.id,
-  hospital: req.user.hospital,
-})
-  .populate({
-    path: "visit",
-    populate: {
-      path: "patient",
-      select: "firstName lastName",
-    },
-  })
-  .populate("diagnosedBy", "name email");
+      _id: req.params.id,
+      hospital: req.user.hospital,
+    })
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("diagnosedBy", "name email");
 
     if (!diagnosis)
       return res.status(404).json({ message: "Diagnosis not found" });
@@ -129,17 +130,18 @@ const getDiagnosis = async (req, res, next) => {
 // GET ALL DIAGNOSES FOR A VISIT
 const getVisitDiagnoses = async (req, res, next) => {
   try {
-    const diagnoses = await Diagnosis.find({ visit: req.params.visitId ,
-      hospital: req.user.hospital
-    })
-      .populate("diagnosedBy", "name email");
+    const diagnoses = await Diagnosis.find({
+      visit: req.params.visitId,
+      hospital: req.user.hospital,
+    }).populate("diagnosedBy", "name email");
+
     res.json({ success: true, data: diagnoses });
   } catch (error) {
     next(error);
   }
 };
 
-// Search Diagnoses
+// SEARCH DIAGNOSES 
 const searchDiagnoses = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
@@ -191,7 +193,7 @@ const searchDiagnoses = async (req, res, next) => {
       },
       { $unwind: { path: "$diagnosedBy", preserveNullAndEmptyArrays: true } },
 
-      // SEARCH
+      // SEARCH 
       {
         $match: {
           $or: [
@@ -199,6 +201,11 @@ const searchDiagnoses = async (req, res, next) => {
             { symptoms: { $regex: keyword, $options: "i" } },
             { "patient.firstName": { $regex: keyword, $options: "i" } },
             { "patient.lastName": { $regex: keyword, $options: "i" } },
+            {
+              "visit._id": mongoose.Types.ObjectId.isValid(keyword)
+                ? new mongoose.Types.ObjectId(keyword)
+                : null,
+            },
           ],
         },
       },
@@ -238,18 +245,18 @@ const searchDiagnoses = async (req, res, next) => {
 const updateDiagnosis = async (req, res, next) => {
   try {
     const diagnosis = await Diagnosis.findOneAndUpdate(
-  { _id: req.params.id, hospital: req.user.hospital },
-  req.body,
-  { new: true }
-)
-.populate({
-  path: "visit",
-  populate: {
-    path: "patient",
-    select: "firstName lastName",
-  },
-})
-.populate("diagnosedBy", "name email");
+      { _id: req.params.id, hospital: req.user.hospital },
+      req.body,
+      { new: true }
+    )
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .populate("diagnosedBy", "name email");
 
     if (!diagnosis)
       return res.status(404).json({ message: "Diagnosis not found" });
@@ -265,10 +272,10 @@ const updateDiagnosis = async (req, res, next) => {
 };
 
 module.exports = {
-    createDiagnosis,
-    getAllDiagnoses,
-    getDiagnosis,
-    getVisitDiagnoses,
-    searchDiagnoses,
-    updateDiagnosis
-}
+  createDiagnosis,
+  getAllDiagnoses,
+  getDiagnosis,
+  getVisitDiagnoses,
+  searchDiagnoses,
+  updateDiagnosis,
+};
