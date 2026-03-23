@@ -152,25 +152,31 @@ const searchDiagnoses = async (req, res, next) => {
     }
 
     const diagnoses = await Diagnosis.find({
-      hospital: req.user.hospital,
+  hospital: req.user.hospital,
+  $or: [
+    { diagnosis: { $regex: keyword, $options: "i" } },
+    { symptoms: { $regex: keyword, $options: "i" } },
+  ],
+})
+.populate({
+  path: "visit",
+  populate: {
+    path: "patient",
+    match: {
       $or: [
-        { diagnosis: { $regex: keyword, $options: "i" } },
-        { symptoms: { $regex: keyword, $options: "i" } },
+        { firstName: { $regex: keyword, $options: "i" } },
+        { lastName: { $regex: keyword, $options: "i" } },
       ],
-    })
-      .populate({
-        path: "visit",
-        populate: {
-          path: "patient",
-          select: "firstName lastName",
-        },
-      })
-      .populate("diagnosedBy", "name email")
-      .limit(20);
+    },
+    select: "firstName lastName",
+  },
+})
+.populate("diagnosedBy", "name email");
+const filtered = diagnoses.filter(d => d.visit?.patient);
 
     res.json({
       success: true,
-      data: diagnoses,
+      data: filtered,
     });
   } catch (err) {
     next(err);
@@ -181,10 +187,18 @@ const searchDiagnoses = async (req, res, next) => {
 const updateDiagnosis = async (req, res, next) => {
   try {
     const diagnosis = await Diagnosis.findOneAndUpdate(
-      { _id: req.params.id, hospital: req.user.hospital },
-      { ...req.body },
-      { new: true }
-    );
+  { _id: req.params.id, hospital: req.user.hospital },
+  req.body,
+  { new: true }
+)
+.populate({
+  path: "visit",
+  populate: {
+    path: "patient",
+    select: "firstName lastName",
+  },
+})
+.populate("diagnosedBy", "name email");
 
     if (!diagnosis)
       return res.status(404).json({ message: "Diagnosis not found" });

@@ -113,25 +113,31 @@ const searchTriages = async (req, res, next) => {
       });
     }
 
-    const triages = await TriageModel.find({
-      hospital: req.user.hospital,
+   const triages = await TriageModel.find({
+  hospital: req.user.hospital,
+  $or: [
+    { complaint: { $regex: keyword, $options: "i" } }
+  ],
+})
+.populate({
+  path: "visit",
+  populate: {
+    path: "patient",
+    match: {
       $or: [
-        { complaint: { $regex: keyword, $options: "i" } },
-      ],
-    })
-      .populate({
-        path: "visit",
-        populate: {
-          path: "patient",
-          select: "firstName lastName",
-        },
-      })
-      .populate("triagedBy", "name role")
-      .limit(20);
+        { firstName: { $regex: keyword, $options: "i" } },
+        { lastName: { $regex: keyword, $options: "i" } },
+      ]
+    },
+    select: "firstName lastName registrationNumber",
+  },
+})
+.populate("triagedBy", "name role");
+const filtered = triages.filter(t => t.visit?.patient);
 
     res.json({
       success: true,
-      data: triages,
+      data: filtered,
     });
   } catch (err) {
     next(err);
