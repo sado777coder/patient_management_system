@@ -151,32 +151,83 @@ const searchDiagnoses = async (req, res, next) => {
       });
     }
 
-    const diagnoses = await Diagnosis.find({
-  hospital: req.user.hospital,
-  $or: [
-    { diagnosis: { $regex: keyword, $options: "i" } },
-    { symptoms: { $regex: keyword, $options: "i" } },
-  ],
-})
-.populate({
-  path: "visit",
-  populate: {
-    path: "patient",
-    match: {
-      $or: [
-        { firstName: { $regex: keyword, $options: "i" } },
-        { lastName: { $regex: keyword, $options: "i" } },
-      ],
-    },
-    select: "firstName lastName",
-  },
-})
-.populate("diagnosedBy", "name email");
-const filtered = diagnoses.filter(d => d.visit?.patient);
+    const results = await Diagnosis.aggregate([
+      {
+        $match: {
+          hospital: req.user.hospital,
+        },
+      },
+
+      // JOIN VISIT
+      {
+        $lookup: {
+          from: "visits",
+          localField: "visit",
+          foreignField: "_id",
+          as: "visit",
+        },
+      },
+      { $unwind: "$visit" },
+
+      // JOIN PATIENT
+      {
+        $lookup: {
+          from: "patients",
+          localField: "visit.patient",
+          foreignField: "_id",
+          as: "patient",
+        },
+      },
+      { $unwind: "$patient" },
+
+      // JOIN USER (diagnosedBy)
+      {
+        $lookup: {
+          from: "users",
+          localField: "diagnosedBy",
+          foreignField: "_id",
+          as: "diagnosedBy",
+        },
+      },
+      { $unwind: { path: "$diagnosedBy", preserveNullAndEmptyArrays: true } },
+
+      // SEARCH
+      {
+        $match: {
+          $or: [
+            { diagnosis: { $regex: keyword, $options: "i" } },
+            { symptoms: { $regex: keyword, $options: "i" } },
+            { "patient.firstName": { $regex: keyword, $options: "i" } },
+            { "patient.lastName": { $regex: keyword, $options: "i" } },
+          ],
+        },
+      },
+
+      {
+        $project: {
+          diagnosis: 1,
+          symptoms: 1,
+          createdAt: 1,
+          diagnosedBy: {
+            _id: "$diagnosedBy._id",
+            name: "$diagnosedBy.name",
+            email: "$diagnosedBy.email",
+          },
+          visit: {
+            _id: "$visit._id",
+            patient: {
+              _id: "$patient._id",
+              firstName: "$patient.firstName",
+              lastName: "$patient.lastName",
+            },
+          },
+        },
+      },
+    ]);
 
     res.json({
       success: true,
-      data: filtered,
+      data: results,
     });
   } catch (err) {
     next(err);

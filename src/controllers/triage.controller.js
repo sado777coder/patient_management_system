@@ -6,13 +6,13 @@ const TriageModel = require("../models/Triage");
 const createTriage = async (req, res, next) => {
   try {
     const triage = await TriageModel.create({
-       ...req.body,
-        hospital: req.user.hospital,
+      ...req.body,
+      hospital: req.user.hospital,
       triagedBy: req.user._id,
     });
 
     res.status(201).json({
-      success:true,
+      success: true,
       message: "Recorded",
       data: triage,
     });
@@ -20,7 +20,6 @@ const createTriage = async (req, res, next) => {
     next(err);
   }
 };
-
 
 /**
  * GET TRIAGES
@@ -31,13 +30,11 @@ const getTriages = async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const filter = {
-      hospital: req.user.hospital,
-      isDeleted: false,
-    };
-
     const [triages, total] = await Promise.all([
-      TriageModel.find(filter)
+      TriageModel.find({
+        hospital: req.user.hospital,
+        isDeleted: false,
+      })
         .populate({
           path: "visit",
           populate: {
@@ -51,10 +48,13 @@ const getTriages = async (req, res, next) => {
         .limit(limit)
         .lean(),
 
-      TriageModel.countDocuments(filter),
+      TriageModel.countDocuments({
+        hospital: req.user.hospital,
+        isDeleted: false,
+      }),
     ]);
 
-    res.status(200).json({
+    res.json({
       success: true,
       data: triages,
       meta: {
@@ -69,6 +69,9 @@ const getTriages = async (req, res, next) => {
   }
 };
 
+/**
+ * GET TRIAGE BY ID
+ */
 const getTriageById = async (req, res, next) => {
   try {
     const triage = await TriageModel.findOne({
@@ -92,16 +95,15 @@ const getTriageById = async (req, res, next) => {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: triage,
-    });
+    res.json({ success: true, data: triage });
   } catch (err) {
     next(err);
   }
 };
 
-// Search Triage
+/**
+ *  SEARCH (AGGREGATION)
+ */
 const searchTriages = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
@@ -113,31 +115,63 @@ const searchTriages = async (req, res, next) => {
       });
     }
 
-   const triages = await TriageModel.find({
-  hospital: req.user.hospital,
-  $or: [
-    { complaint: { $regex: keyword, $options: "i" } }
-  ],
-})
-.populate({
-  path: "visit",
-  populate: {
-    path: "patient",
-    match: {
-      $or: [
-        { firstName: { $regex: keyword, $options: "i" } },
-        { lastName: { $regex: keyword, $options: "i" } },
-      ]
-    },
-    select: "firstName lastName registrationNumber",
-  },
-})
-.populate("triagedBy", "name role");
-const filtered = triages.filter(t => t.visit?.patient);
+    const results = await TriageModel.aggregate([
+      {
+        $match: {
+          hospital: req.user.hospital,
+          isDeleted: false,
+        },
+      },
+
+      // JOIN VISITS
+      {
+        $lookup: {
+          from: "visits",
+          localField: "visit",
+          foreignField: "_id",
+          as: "visit",
+        },
+      },
+      { $unwind: "$visit" },
+
+      // JOIN PATIENTS
+      {
+        $lookup: {
+          from: "patients",
+          localField: "visit.patient",
+          foreignField: "_id",
+          as: "patient",
+        },
+      },
+      { $unwind: "$patient" },
+
+      // SEARCH
+      {
+        $match: {
+          $or: [
+            { complaint: { $regex: keyword, $options: "i" } },
+            { "patient.firstName": { $regex: keyword, $options: "i" } },
+            { "patient.lastName": { $regex: keyword, $options: "i" } },
+          ],
+        },
+      },
+
+      // CLEAN RESPONSE
+      {
+        $project: {
+          complaint: 1,
+          priority: 1,
+          vitals: 1,
+          createdAt: 1,
+          "patient.firstName": 1,
+          "patient.lastName": 1,
+        },
+      },
+    ]);
 
     res.json({
       success: true,
-      data: filtered,
+      data: results,
     });
   } catch (err) {
     next(err);
@@ -150,42 +184,18 @@ const filtered = triages.filter(t => t.visit?.patient);
 const updateTriage = async (req, res, next) => {
   try {
     const triage = await TriageModel.findOneAndUpdate(
-  { _id: req.params.id, hospital: req.user.hospital , isDeleted: false,},
-  req.body,
-  { new: true, runValidators: true }
-);
-
-    res.status(200).json({
-      success:true,
-      message:"Your updates",
-       data: triage });
-  } catch (err) {
-    next(err);
-  }
-};
-
-
-/**
- * DELETE TRIAGE (admin)
- */
-const deleteTriage = async (req, res, next) => {
-  try {
-    const triage = await TriageModel.findOneAndUpdate(
-      { _id: req.params.id, hospital: req.user.hospital, isDeleted: false },
-      { isDeleted: true, deletedAt: new Date() },
-      { new: true }
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      req.body,
+      { new: true, runValidators: true }
     );
 
-    if (!triage) {
-      return res.status(404).json({
-        success: false,
-        message: "Triage record not found or already deleted",
-      });
-    }
-
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "Triage record soft-deleted successfully",
+      message: "Updated",
       data: triage,
     });
   } catch (err) {
@@ -193,6 +203,36 @@ const deleteTriage = async (req, res, next) => {
   }
 };
 
+/**
+ * DELETE TRIAGE
+ */
+const deleteTriage = async (req, res, next) => {
+  try {
+    const triage = await TriageModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      { isDeleted: true, deletedAt: new Date() },
+      { new: true }
+    );
+
+    if (!triage) {
+      return res.status(404).json({
+        success: false,
+        message: "Not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Deleted",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 module.exports = {
   createTriage,
@@ -201,4 +241,4 @@ module.exports = {
   searchTriages,
   updateTriage,
   deleteTriage,
-}
+};
