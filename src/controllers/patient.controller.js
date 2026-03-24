@@ -9,7 +9,7 @@ const createPatient = async (req, res, next) => {
     if (!req.user.hospital) {
       return res.status(400).json({
         success: false,
-        message: "Cannot create patient: user is not associated with a hospital",
+        message: "User not linked to hospital",
       });
     }
 
@@ -25,17 +25,6 @@ const createPatient = async (req, res, next) => {
       data: patient,
     });
   } catch (err) {
-    console.log("Mongo error:", err);
-
-    if (err.code === 11000) {
-      const duplicateField = Object.keys(err.keyPattern || {});
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate detected",
-        fields: duplicateField,
-      });
-    }
-
     next(err);
   }
 };
@@ -52,20 +41,28 @@ const getPatients = async (req, res, next) => {
       isDeleted: false,
     };
 
-    const [patients, total] = await Promise.all([
-      PatientModel.find(filter)
-        .populate("unit", "name code")
-        .populate("createdBy", "firstName lastName email role")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      PatientModel.countDocuments(filter),
-    ]);
+    let patients = await PatientModel.find(filter)
+      .populate("unit", "name code")
+      .populate("createdBy", "firstName lastName email role")
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    patients = patients.map((p) => ({
+      ...p,
+      createdBy: p.createdBy
+        ? {
+            ...p.createdBy,
+            name: `${p.createdBy.firstName || ""} ${p.createdBy.lastName || ""}`.trim(),
+          }
+        : null,
+    }));
+
+    const total = await PatientModel.countDocuments(filter);
 
     res.status(200).json({
       success: true,
-      message: "Patients fetched successfully",
       data: patients,
       meta: {
         total,
@@ -79,20 +76,9 @@ const getPatients = async (req, res, next) => {
   }
 };
 
-// GET PATIENT BY ID (CACHE)
+// GET BY ID
 const getPatientById = async (req, res, next) => {
   try {
-    const cacheKey = `patient:${req.user.hospital}:${req.params.id}`;
-
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      return res.status(200).json({
-        success: true,
-        source: "cache",
-        data: JSON.parse(cached),
-      });
-    }
-
     const patient = await PatientModel.findOne({
       _id: req.params.id,
       hospital: req.user.hospital,
@@ -109,11 +95,16 @@ const getPatientById = async (req, res, next) => {
       });
     }
 
-    await redis.set(cacheKey, JSON.stringify(patient), "EX", 60);
+    // ADD NAME FIELD
+    patient.createdBy = patient.createdBy
+      ? {
+          ...patient.createdBy,
+          name: `${patient.createdBy.firstName || ""} ${patient.createdBy.lastName || ""}`.trim(),
+        }
+      : null;
 
     res.status(200).json({
       success: true,
-      source: "database",
       data: patient,
     });
   } catch (err) {
@@ -121,25 +112,9 @@ const getPatientById = async (req, res, next) => {
   }
 };
 
-// UPDATE PATIENT
+// UPDATE
 const updatePatient = async (req, res, next) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid patient ID",
-      });
-    }
-
-    const blockedFields = [
-      "hospital",
-      "registrationNumber",
-      "isDeleted",
-      "deletedAt",
-      "deletedBy",
-    ];
-    blockedFields.forEach((f) => delete req.body[f]);
-
     const patient = await PatientModel.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -147,23 +122,20 @@ const updatePatient = async (req, res, next) => {
         isDeleted: false,
       },
       { ...req.body, updatedBy: req.user._id },
-      { new: true, runValidators: true }
+      { new: true }
     )
-      .populate("unit", "name code")
+      .populate("createdBy", "firstName lastName email role")
       .lean();
 
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "Not found",
       });
     }
 
-    await invalidatePatient(`${req.user.hospital}:${patient._id}`);
-
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "Patient updated successfully",
       data: patient,
     });
   } catch (err) {
@@ -171,16 +143,9 @@ const updatePatient = async (req, res, next) => {
   }
 };
 
-// DELETE PATIENT
+// DELETE
 const deletePatient = async (req, res, next) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid patient ID",
-      });
-    }
-
     const patient = await PatientModel.findOne({
       _id: req.params.id,
       hospital: req.user.hospital,
@@ -190,89 +155,57 @@ const deletePatient = async (req, res, next) => {
     if (!patient) {
       return res.status(404).json({
         success: false,
-        message: "Patient not found",
+        message: "Not found",
       });
     }
 
     await patient.softDelete(req.user._id);
 
-    await invalidatePatient(`${req.user.hospital}:${patient._id}`);
-
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "Patient archived successfully",
+      message: "Archived",
     });
   } catch (err) {
     next(err);
   }
 };
 
-// SEARCH PATIENTS
+// SEARCH
 const searchPatients = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
-
     if (!keyword) {
       return res.status(400).json({
         success: false,
-        message: "Search query required",
+        message: "Search required",
       });
     }
 
-    const normalized = keyword.toLowerCase();
-    const cacheKey = `patient-search:${req.user.hospital}:${normalized}`;
-
-    const cached = await redis.get(cacheKey);
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      return res.status(200).json({
-        success: true,
-        source: "cache",
-        count: parsed.length,
-        data: parsed,
-      });
-    }
-
-    let filter = {
+    let patients = await PatientModel.find({
       hospital: req.user.hospital,
       isDeleted: false,
       $or: [
-        { firstName: { $regex: normalized, $options: "i" } },
-        { lastName: { $regex: normalized, $options: "i" } },
-        { phone: { $regex: normalized, $options: "i" } },
-        { email: { $regex: normalized, $options: "i" } },
-        {
-          registrationNumber: {
-            $regex: normalized.replace(/\s/g, ""),
-            $options: "i",
-          },
-        },
+        { firstName: { $regex: keyword, $options: "i" } },
+        { lastName: { $regex: keyword, $options: "i" } },
+        { phone: { $regex: keyword, $options: "i" } },
+        { email: { $regex: keyword, $options: "i" } },
       ],
-    };
-
-    if (normalized.startsWith("pat-") || normalized.startsWith("gh-")) {
-      filter.$or.unshift({
-        registrationNumber: normalized.toUpperCase(),
-      });
-    }
-
-    if (mongoose.Types.ObjectId.isValid(keyword)) {
-      filter.$or.unshift({ _id: keyword });
-    }
-
-    const patients = await PatientModel.find(filter)
-      .populate("unit", "name code")
+    })
       .populate("createdBy", "firstName lastName email role")
-      .sort({ createdAt: -1 })
-      .limit(20)
       .lean();
 
-    await redis.set(cacheKey, JSON.stringify(patients), "EX", 30);
+    patients = patients.map((p) => ({
+      ...p,
+      createdBy: p.createdBy
+        ? {
+            ...p.createdBy,
+            name: `${p.createdBy.firstName || ""} ${p.createdBy.lastName || ""}`.trim(),
+          }
+        : null,
+    }));
 
-    res.status(200).json({
+    res.json({
       success: true,
-      source: "database",
-      count: patients.length,
       data: patients,
     });
   } catch (err) {
