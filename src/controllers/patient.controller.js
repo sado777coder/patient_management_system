@@ -99,7 +99,7 @@ const getPatientById = async (req, res, next) => {
       isDeleted: false,
     })
       .populate("unit", "name code")
-      .populate("createdBy", "name role")
+      .populate("createdBy", "name email role")
       .lean();
 
     if (!patient) {

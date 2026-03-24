@@ -1,4 +1,5 @@
 const TriageModel = require("../models/Triage");
+const mongoose = require("mongoose");
 
 /**
  * CREATE TRIAGE
@@ -145,7 +146,7 @@ const searchTriages = async (req, res, next) => {
       },
       { $unwind: "$patient" },
 
-      // TRIAGED BY 
+      // TRIAGED BY
       {
         $lookup: {
           from: "users",
@@ -161,18 +162,28 @@ const searchTriages = async (req, res, next) => {
         },
       },
 
-      // SEARCH
+      //  SEARCH
       {
         $match: {
           $or: [
             { complaint: { $regex: keyword, $options: "i" } },
             { "patient.firstName": { $regex: keyword, $options: "i" } },
             { "patient.lastName": { $regex: keyword, $options: "i" } },
+
+            //  Visit ID search
+            ...(mongoose.Types.ObjectId.isValid(keyword)
+              ? [{ "visit._id": new mongoose.Types.ObjectId(keyword) }]
+              : []),
+
+            // Patient ID search
+            ...(mongoose.Types.ObjectId.isValid(keyword)
+              ? [{ "patient._id": new mongoose.Types.ObjectId(keyword) }]
+              : []),
           ],
         },
       },
 
-      // RESPONSE FORMAT 
+      // RESPONSE
       {
         $project: {
           complaint: 1,
