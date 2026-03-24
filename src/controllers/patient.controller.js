@@ -55,7 +55,7 @@ const getPatients = async (req, res, next) => {
     const [patients, total] = await Promise.all([
       PatientModel.find(filter)
         .populate("unit", "name code")
-        .populate("createdBy", "name email role")
+        .populate("createdBy", "firstName lastName email role")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -99,7 +99,7 @@ const getPatientById = async (req, res, next) => {
       isDeleted: false,
     })
       .populate("unit", "name code")
-      .populate("createdBy", "name email role")
+      .populate("createdBy", "firstName lastName email role")
       .lean();
 
     if (!patient) {
@@ -262,7 +262,7 @@ const searchPatients = async (req, res, next) => {
 
     const patients = await PatientModel.find(filter)
       .populate("unit", "name code")
-      .populate("createdBy", "name role")
+      .populate("createdBy", "firstName lastName email role")
       .sort({ createdAt: -1 })
       .limit(20)
       .lean();
