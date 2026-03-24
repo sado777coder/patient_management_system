@@ -169,6 +169,7 @@ const searchTriages = async (req, res, next) => {
             { complaint: { $regex: keyword, $options: "i" } },
             { "patient.firstName": { $regex: keyword, $options: "i" } },
             { "patient.lastName": { $regex: keyword, $options: "i" } },
+            { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
 
             //  Visit ID search
             ...(mongoose.Types.ObjectId.isValid(keyword)

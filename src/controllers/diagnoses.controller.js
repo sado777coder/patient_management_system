@@ -201,6 +201,7 @@ const searchDiagnoses = async (req, res, next) => {
             { symptoms: { $regex: keyword, $options: "i" } },
             { "patient.firstName": { $regex: keyword, $options: "i" } },
             { "patient.lastName": { $regex: keyword, $options: "i" } },
+            { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
             {
               "visit._id": mongoose.Types.ObjectId.isValid(keyword)
                 ? new mongoose.Types.ObjectId(keyword)
