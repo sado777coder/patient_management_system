@@ -31,7 +31,7 @@ const getTriages = async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const [triages, total] = await Promise.all([
+    let [triages, total] = await Promise.all([
       TriageModel.find({
         hospital: req.user.hospital,
         isDeleted: false,
@@ -43,7 +43,7 @@ const getTriages = async (req, res, next) => {
             select: "firstName lastName",
           },
         })
-        .populate("triagedBy", "name role")
+        .populate("triagedBy", "firstName lastName email role")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -54,6 +54,17 @@ const getTriages = async (req, res, next) => {
         isDeleted: false,
       }),
     ]);
+
+    //  FORMAT NAME
+    triages = triages.map((t) => ({
+      ...t,
+      triagedBy: t.triagedBy
+        ? {
+            ...t.triagedBy,
+            name: `${t.triagedBy.firstName || ""} ${t.triagedBy.lastName || ""}`.trim(),
+          }
+        : null,
+    }));
 
     res.json({
       success: true,
@@ -87,7 +98,7 @@ const getTriageById = async (req, res, next) => {
           select: "firstName lastName",
         },
       })
-      .populate("triagedBy", "name role");
+      .populate("triagedBy", "firstName lastName email role");
 
     if (!triage) {
       return res.status(404).json({
@@ -103,7 +114,7 @@ const getTriageById = async (req, res, next) => {
 };
 
 /**
- *  SEARCH (AGGREGATION)
+ * SEARCH TRIAGES
  */
 const searchTriages = async (req, res, next) => {
   try {
@@ -116,6 +127,22 @@ const searchTriages = async (req, res, next) => {
       });
     }
 
+    const matchConditions = [
+      { complaint: { $regex: keyword, $options: "i" } },
+      { "patient.firstName": { $regex: keyword, $options: "i" } },
+      { "patient.lastName": { $regex: keyword, $options: "i" } },
+      { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      matchConditions.push({
+        "visit._id": new mongoose.Types.ObjectId(keyword),
+      });
+      matchConditions.push({
+        "patient._id": new mongoose.Types.ObjectId(keyword),
+      });
+    }
+
     const results = await TriageModel.aggregate([
       {
         $match: {
@@ -124,7 +151,6 @@ const searchTriages = async (req, res, next) => {
         },
       },
 
-      // VISIT
       {
         $lookup: {
           from: "visits",
@@ -135,7 +161,6 @@ const searchTriages = async (req, res, next) => {
       },
       { $unwind: "$visit" },
 
-      // PATIENT
       {
         $lookup: {
           from: "patients",
@@ -146,7 +171,6 @@ const searchTriages = async (req, res, next) => {
       },
       { $unwind: "$patient" },
 
-      // TRIAGED BY
       {
         $lookup: {
           from: "users",
@@ -162,29 +186,12 @@ const searchTriages = async (req, res, next) => {
         },
       },
 
-      //  SEARCH
       {
         $match: {
-          $or: [
-            { complaint: { $regex: keyword, $options: "i" } },
-            { "patient.firstName": { $regex: keyword, $options: "i" } },
-            { "patient.lastName": { $regex: keyword, $options: "i" } },
-            { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
-
-            //  Visit ID search
-            ...(mongoose.Types.ObjectId.isValid(keyword)
-              ? [{ "visit._id": new mongoose.Types.ObjectId(keyword) }]
-              : []),
-
-            // Patient ID search
-            ...(mongoose.Types.ObjectId.isValid(keyword)
-              ? [{ "patient._id": new mongoose.Types.ObjectId(keyword) }]
-              : []),
-          ],
+          $or: matchConditions,
         },
       },
 
-      // RESPONSE
       {
         $project: {
           complaint: 1,
@@ -193,7 +200,9 @@ const searchTriages = async (req, res, next) => {
           createdAt: 1,
           triagedBy: {
             _id: "$triagedBy._id",
-            name: "$triagedBy.name",
+            name: {
+              $concat: ["$triagedBy.firstName", " ", "$triagedBy.lastName"],
+            },
           },
           visit: {
             _id: "$visit._id",

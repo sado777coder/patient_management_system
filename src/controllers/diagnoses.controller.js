@@ -7,7 +7,7 @@ const createDiagnosis = async (req, res, next) => {
   try {
     const { visit } = req.body;
 
-    const triageExists = await Triage.findOne({ 
+    const triageExists = await Triage.findOne({
       visit,
       hospital: req.user.hospital
     });
@@ -153,6 +153,21 @@ const searchDiagnoses = async (req, res, next) => {
       });
     }
 
+    //  build conditions safely
+    const matchConditions = [
+      { diagnosis: { $regex: keyword, $options: "i" } },
+      { symptoms: { $regex: keyword, $options: "i" } },
+      { "patient.firstName": { $regex: keyword, $options: "i" } },
+      { "patient.lastName": { $regex: keyword, $options: "i" } },
+      { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      matchConditions.push({
+        "visit._id": new mongoose.Types.ObjectId(keyword),
+      });
+    }
+
     const results = await Diagnosis.aggregate([
       {
         $match: {
@@ -182,7 +197,7 @@ const searchDiagnoses = async (req, res, next) => {
       },
       { $unwind: "$patient" },
 
-      // JOIN USER (diagnosedBy)
+      // JOIN USER
       {
         $lookup: {
           from: "users",
@@ -191,26 +206,21 @@ const searchDiagnoses = async (req, res, next) => {
           as: "diagnosedBy",
         },
       },
-      { $unwind: { path: "$diagnosedBy", preserveNullAndEmptyArrays: true } },
-
-      // SEARCH 
       {
-        $match: {
-          $or: [
-            { diagnosis: { $regex: keyword, $options: "i" } },
-            { symptoms: { $regex: keyword, $options: "i" } },
-            { "patient.firstName": { $regex: keyword, $options: "i" } },
-            { "patient.lastName": { $regex: keyword, $options: "i" } },
-            { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
-            {
-              "visit._id": mongoose.Types.ObjectId.isValid(keyword)
-                ? new mongoose.Types.ObjectId(keyword)
-                : null,
-            },
-          ],
+        $unwind: {
+          path: "$diagnosedBy",
+          preserveNullAndEmptyArrays: true,
         },
       },
 
+      // SEARCH
+      {
+        $match: {
+          $or: matchConditions,
+        },
+      },
+
+      // RESPONSE FORMAT
       {
         $project: {
           diagnosis: 1,

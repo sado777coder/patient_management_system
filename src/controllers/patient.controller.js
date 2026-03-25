@@ -189,6 +189,7 @@ const searchPatients = async (req, res, next) => {
         { lastName: { $regex: keyword, $options: "i" } },
         { phone: { $regex: keyword, $options: "i" } },
         { email: { $regex: keyword, $options: "i" } },
+        { registrationNumber: { $regex: keyword, $options: "i" } },
       ],
     })
       .populate("createdBy", "firstName lastName email role")
