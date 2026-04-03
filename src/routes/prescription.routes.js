@@ -9,6 +9,7 @@ const {
   createPrescription,
   getPrescriptions,
   updatePrescription,
+  searchPrescriptions,
   deletePrescription,
 } = require("../controllers/prescription.controller");
 
@@ -25,6 +26,8 @@ router.post(
   validate(createPrescriptionValidator),
   createPrescription
 );
+
+router.get("/search",searchPrescriptions);
 
 router.get("/", getPrescriptions);
 

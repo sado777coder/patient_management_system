@@ -8,16 +8,24 @@ const {
   getLabOrder,
   getDiagnosisLabOrders,
   updateLabOrder,
+  searchLabOrders
 } = require("../controllers/labOrders.controller");
+
 const { createLabOrderValidator, updateLabOrderValidator } = require("../validators/labOrder.validator");
 const validate = require("../middlewares/validate"); // Joi middleware
 
 router.use( requireAuth);
+
 router.post("/", 
     allowRoles(permissions.PRESCRIBE),
     validate(createLabOrderValidator), createLabOrder);
+
+    router.get("/search", searchLabOrders);
+
 router.get("/:id", getLabOrder);
+
 router.get("/diagnosis/:diagnosisId", getDiagnosisLabOrders);
+
 router.patch("/:id", 
     allowRoles(permissions.PRESCRIBE),
     validate(updateLabOrderValidator), updateLabOrder);

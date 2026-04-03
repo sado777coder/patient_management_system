@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Billing = require("../models/Billing");
 const Ledger = require("../models/LedgerTransaction");
 const Invoice = require("../models/Invoice");
+const Admission = require("../models/Admission");
 
 // CREATE CHARGE
 const createCharge = async (req, res, next) => {
@@ -206,10 +207,46 @@ const generateInvoice = async (req, res, next) => {
   }
 };
 
+// CHECK UNPAID BILLS FOR AN ADMISSION (SAFE VERSION)
+const checkAdmissionBills = async (req, res, next) => {
+  try {
+    const { admissionId } = req.params;
+
+    // Get admission to know the patient
+    const admission = await Admission.findOne({
+      _id: admissionId,
+      hospital: req.user.hospital,
+    });
+
+    if (!admission) {
+      return res.status(404).json({
+        success: false,
+        message: "Admission not found",
+      });
+    }
+
+    // Find patient billing account
+    const account = await Billing.findOne({
+      hospital: req.user.hospital,
+      patient: admission.patient,
+    });
+
+    const unpaid = account ? account.balance / 100 : 0; // convert from pesewas
+
+    res.status(200).json({
+      success: true,
+      unpaid,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = { 
   createCharge, 
   payBill,
    refund,
     getPaymentHistory, 
-    generateInvoice 
+    generateInvoice,
+    checkAdmissionBills
   };

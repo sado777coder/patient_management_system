@@ -11,6 +11,7 @@ const {
   getLabResults,
   getLabResultById,
   updateLabResult,
+  searchLabResults,
   deleteLabResult,
 } = require("../controllers/labResult.controller");
 
@@ -28,6 +29,8 @@ router.post(
   checkOutstandingBills,
   createLabResult
 );
+
+router.get("/search",searchLabResults);
 
 router.get("/", getLabResults);
 

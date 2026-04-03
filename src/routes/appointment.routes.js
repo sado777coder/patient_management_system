@@ -10,6 +10,7 @@ const {
   getAppointments,
   getAppointmentById,
   updateAppointment,
+  searchAppointments,
   deleteAppointment,
 } = require("../controllers/appointment.controller");
 
@@ -28,6 +29,8 @@ router.post(
   validate(createAppointmentValidator),
   createAppointment
 );
+
+router.get("/search", searchAppointments);
 
 // GET ALL APPOINTMENTS
 router.get("/", getAppointments);

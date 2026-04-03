@@ -1,10 +1,12 @@
 const Joi = require("joi");
 
 const createLabResultValidator = Joi.object({
-  visit: Joi.string().required(),
-  patient: Joi.string().required(),
+  labOrder: Joi.string().optional(),
 
-  testName: Joi.string().required(),
+  visit: Joi.string().optional(),
+  patient: Joi.string().optional(),
+
+  testName: Joi.string().optional(), // auto-filled if from order
   result: Joi.string().optional(),
   normalRange: Joi.string().optional(),
 
@@ -13,7 +15,9 @@ const createLabResultValidator = Joi.object({
   status: Joi.string()
     .valid("pending", "completed")
     .default("pending"),
-});
+})
+  // REQUIRE ONE SOURCE OF TRUTH
+  .or("labOrder", "patient");
 
 const updateLabResultValidator = Joi.object({
   visit: Joi.string().optional(),

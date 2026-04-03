@@ -1,5 +1,6 @@
 const PrescriptionModel = require("../models/Prescription");
 const Diagnosis = require("../models/Diagnosis");
+const mongoose = require("mongoose");
 
 const createPrescription = async (req, res, next) => {
   try {
@@ -44,18 +45,56 @@ const createPrescription = async (req, res, next) => {
 
 const getPrescriptions = async (req, res, next) => {
   try {
-    const prescriptions = await PrescriptionModel.find({
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 10, 100);
+    const skip = (page - 1) * limit;
+
+    const search = req.query.q?.trim();
+
+    let filter = {
       hospital: req.user.hospital,
       isDeleted: false,
-    })
-      .populate("visit")
-      .populate("prescribedBy", "name email")
-      .sort({ createdAt: -1 });
+    };
+
+    const [prescriptions, total] = await Promise.all([
+      PrescriptionModel.find(filter)
+        .populate({
+          path: "visit",
+          populate: {
+            path: "patient",
+            select: "firstName lastName",
+          },
+        })
+        .populate("prescribedBy", "firstName lastName email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      PrescriptionModel.countDocuments(filter),
+    ]);
+
+    const formatted = prescriptions.map((p) => ({
+      ...p,
+      prescribedBy: p.prescribedBy
+        ? {
+            ...p.prescribedBy,
+            name: `${p.prescribedBy.firstName} ${p.prescribedBy.lastName}`,
+          }
+        : null,
+    }));
 
     res.json({
       success: true,
-      data: prescriptions,
+      data: formatted,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+      },
     });
+
   } catch (error) {
     next(error);
   }
@@ -97,6 +136,96 @@ const updatePrescription = async (req, res, next) => {
   }
 };
 
+/**
+ * SEARCH PRESCRIPTIONS
+ */
+const searchPrescriptions = async (req, res, next) => {
+  try {
+    const keyword = req.query.q?.trim();
+
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query required",
+      });
+    }
+
+    const matchConditions = [
+      { "patient.firstName": { $regex: keyword, $options: "i" } },
+      { "patient.lastName": { $regex: keyword, $options: "i" } },
+      { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
+      { "medications.name": { $regex: keyword, $options: "i" } },
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      matchConditions.push({ _id: new mongoose.Types.ObjectId(keyword) });
+      matchConditions.push({ "visit._id": new mongoose.Types.ObjectId(keyword) });
+    }
+
+    const results = await PrescriptionModel.aggregate([
+      { $match: { hospital: req.user.hospital, isDeleted: false } },
+
+      {
+        $lookup: {
+          from: "visits",
+          localField: "visit",
+          foreignField: "_id",
+          as: "visit",
+        },
+      },
+      { $unwind: "$visit" },
+
+      {
+        $lookup: {
+          from: "patients",
+          localField: "visit.patient",
+          foreignField: "_id",
+          as: "patient",
+        },
+      },
+      { $unwind: "$patient" },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "prescribedBy",
+          foreignField: "_id",
+          as: "prescribedBy",
+        },
+      },
+      { $unwind: { path: "$prescribedBy", preserveNullAndEmptyArrays: true } },
+
+      { $match: { $or: matchConditions } },
+
+      {
+        $project: {
+          medications: 1,
+          createdAt: 1,
+          prescribedBy: {
+            _id: "$prescribedBy._id",
+            name: {
+              $concat: ["$prescribedBy.firstName", " ", "$prescribedBy.lastName"],
+            },
+          },
+          visit: {
+            _id: "$visit._id",
+            patient: {
+              _id: "$patient._id",
+              firstName: "$patient.firstName",
+              lastName: "$patient.lastName",
+            },
+          },
+        },
+      },
+    ]);
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
 const deletePrescription = async (req, res, next) => {
   try {
     const prescription = await PrescriptionModel.findOneAndUpdate(
@@ -131,5 +260,6 @@ module.exports = {
   createPrescription,
   getPrescriptions,
   updatePrescription,
+  searchPrescriptions,
   deletePrescription,
 };

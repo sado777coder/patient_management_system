@@ -9,6 +9,7 @@ const allowRoles = require("../middlewares/rbac");
 const {
   createDispense,
   getDispenses,
+  searchDispenses
 } = require("../controllers/dispense.controller");
 
 const { createDispenseValidator } = require("../validators/dispense.validator");
@@ -23,6 +24,8 @@ router.post(
   checkOutstandingBills, //   blocks unpaid patients FIRST
   createDispense
 );
+
+router.get("/search", searchDispenses);
 
 router.get("/", getDispenses);
 

@@ -8,6 +8,7 @@ const billingSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+
     patient: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Patient",

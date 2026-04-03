@@ -1,5 +1,6 @@
 const LabOrder = require("../models/LabOrder");
 const Diagnosis = require("../models/Diagnosis");
+const mongoose = require("mongoose");
 
 // CREATE LAB ORDER
 const createLabOrder = async (req, res, next) => {
@@ -77,14 +78,56 @@ const getLabOrder = async (req, res, next) => {
 // GET ALL LAB ORDERS FOR A DIAGNOSIS
 const getDiagnosisLabOrders = async (req, res, next) => {
   try {
-    const labOrders = await LabOrder.find({
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Number(req.query.limit) || 10, 100);
+    const skip = (page - 1) * limit;
+
+    const search = req.query.q?.trim();
+
+    let filter = {
       diagnosis: req.params.diagnosisId,
       hospital: req.user.hospital,
-    }).populate("requestedBy", "name email");
+    };
+
+    if (search) {
+      filter.$or = [
+        { notes: { $regex: search, $options: "i" } },
+        { status: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    let [labOrders, total] = await Promise.all([
+      LabOrder.find(filter)
+        .populate("diagnosis")
+        .populate("requestedBy", "firstName lastName email")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+
+      LabOrder.countDocuments(filter),
+    ]);
+
+    // format requestedBy name
+    labOrders = labOrders.map((o) => ({
+      ...o,
+      requestedBy: o.requestedBy
+        ? {
+            ...o.requestedBy,
+            name: `${o.requestedBy.firstName || ""} ${o.requestedBy.lastName || ""}`.trim(),
+          }
+        : null,
+    }));
 
     res.json({
       success: true,
       data: labOrders,
+      meta: {
+        total,
+        page,
+        pages: Math.ceil(total / limit),
+        limit,
+      },
     });
 
   } catch (error) {
@@ -130,9 +173,111 @@ const updateLabOrder = async (req, res, next) => {
   }
 };
 
+/**
+ * SEARCH LAB ORDERS
+ */
+const searchLabOrders = async (req, res, next) => {
+  try {
+    const keyword = req.query.q?.trim();
+
+    if (!keyword) {
+      return res.status(400).json({
+        success: false,
+        message: "Search query required",
+      });
+    }
+
+    const matchConditions = [
+      { notes: { $regex: keyword, $options: "i" } },
+      { status: { $regex: keyword, $options: "i" } },
+      { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(keyword)) {
+      matchConditions.push({ _id: new mongoose.Types.ObjectId(keyword) });
+    }
+
+    const results = await LabOrder.aggregate([
+      { $match: { hospital: req.user.hospital, isDeleted: false } },
+
+      // FIX: join diagnosis → visit → patient
+      {
+        $lookup: {
+          from: "diagnoses",
+          localField: "diagnosis",
+          foreignField: "_id",
+          as: "diagnosis",
+        },
+      },
+      { $unwind: "$diagnosis" },
+
+      {
+        $lookup: {
+          from: "visits",
+          localField: "diagnosis.visit",
+          foreignField: "_id",
+          as: "visit",
+        },
+      },
+      { $unwind: "$visit" },
+
+      {
+        $lookup: {
+          from: "patients",
+          localField: "visit.patient",
+          foreignField: "_id",
+          as: "patient",
+        },
+      },
+      { $unwind: "$patient" },
+
+      {
+        $lookup: {
+          from: "users",
+          localField: "requestedBy",
+          foreignField: "_id",
+          as: "requestedBy",
+        },
+      },
+      { $unwind: { path: "$requestedBy", preserveNullAndEmptyArrays: true } },
+
+      { $match: { $or: matchConditions } },
+
+      {
+        $project: {
+          tests: 1,
+          status: 1,
+          notes: 1,
+          createdAt: 1,
+          requestedBy: {
+            _id: "$requestedBy._id",
+            name: {
+              $trim: {
+                input: {
+                  $concat: ["$requestedBy.firstName", " ", "$requestedBy.lastName"],
+                },
+              },
+            },
+          },
+          patient: {
+            _id: "$patient._id",
+            firstName: "$patient.firstName",
+            lastName: "$patient.lastName",
+          },
+        },
+      },
+    ]);
+
+    res.json({ success: true, data: results });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createLabOrder,
   getLabOrder,
   getDiagnosisLabOrders,
   updateLabOrder,
+  searchLabOrders
 };

@@ -11,6 +11,7 @@ const {
   refund,
   getPaymentHistory,
   generateInvoice,
+  checkAdmissionBills
 } = require("../controllers/billing.controller");
 
 const {
@@ -59,5 +60,8 @@ router.get(
   validate(patientIdParamValidator, "params"),
   generateInvoice
 );
+
+router.get("/check/:admissionId", 
+  checkAdmissionBills);
 
 module.exports = router;
