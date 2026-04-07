@@ -78,56 +78,29 @@ const getLabOrder = async (req, res, next) => {
 // GET ALL LAB ORDERS FOR A DIAGNOSIS
 const getDiagnosisLabOrders = async (req, res, next) => {
   try {
-    const page = Math.max(Number(req.query.page) || 1, 1);
-    const limit = Math.min(Number(req.query.limit) || 10, 100);
-    const skip = (page - 1) * limit;
-
-    const search = req.query.q?.trim();
-
-    let filter = {
+    const filter = {
       diagnosis: req.params.diagnosisId,
       hospital: req.user.hospital,
     };
 
-    if (search) {
-      filter.$or = [
-        { notes: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    let [labOrders, total] = await Promise.all([
-      LabOrder.find(filter)
-        .populate("diagnosis")
-        .populate("requestedBy", "firstName lastName email")
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-
-      LabOrder.countDocuments(filter),
-    ]);
-
-    // format requestedBy name
-    labOrders = labOrders.map((o) => ({
-      ...o,
-      requestedBy: o.requestedBy
-        ? {
-            ...o.requestedBy,
-            name: `${o.requestedBy.firstName || ""} ${o.requestedBy.lastName || ""}`.trim(),
-          }
-        : null,
-    }));
+    const labOrders = await LabOrder.find(filter)
+      .populate({
+        path: "diagnosis",
+        populate: {
+          path: "visit",
+          populate: {
+            path: "patient",
+            select: "firstName lastName",
+          },
+        },
+      })
+      .populate("requestedBy", "firstName lastName email")
+      .sort({ createdAt: -1 })
+      .lean();
 
     res.json({
       success: true,
       data: labOrders,
-      meta: {
-        total,
-        page,
-        pages: Math.ceil(total / limit),
-        limit,
-      },
     });
 
   } catch (error) {
