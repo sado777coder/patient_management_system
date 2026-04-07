@@ -36,6 +36,7 @@ const createLabResult = async (req, res, next) => {
         if (!order) throw new Error("Lab order not found");
 
         patient = order.diagnosis.visit.patient._id;
+        req.body.visit = order.diagnosis.visit._id;
 
         // If multiple tests → you may later loop, for now take first
         if (!testName) {
