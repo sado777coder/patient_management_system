@@ -5,6 +5,7 @@ const allowRoles = require("../middlewares/rbac");
 const permissions = require("../middlewares/permissions");
 const {
   createLabOrder,
+  getAllLabOrders,
   getLabOrder,
   getDiagnosisLabOrders,
   updateLabOrder,
@@ -21,10 +22,11 @@ router.post("/",
     validate(createLabOrderValidator), createLabOrder);
 
     router.get("/search", searchLabOrders);
+    router.get("/", getAllLabOrders);
+
+    router.get("/diagnosis/:diagnosisId", getDiagnosisLabOrders);
 
 router.get("/:id", getLabOrder);
-
-router.get("/diagnosis/:diagnosisId", getDiagnosisLabOrders);
 
 router.patch("/:id", 
     allowRoles(permissions.PRESCRIBE),

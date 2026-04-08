@@ -48,6 +48,41 @@ const createLabOrder = async (req, res, next) => {
   }
 };
 
+// GET ALL LAB ORDERS (with pagination)
+const getAllLabOrders = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const filter = { hospital: req.user.hospital };
+
+    const total = await LabOrder.countDocuments(filter);
+
+    const orders = await LabOrder.find(filter)
+      .populate({
+        path: "diagnosis",
+        populate: {
+          path: "visit",
+          populate: {
+            path: "patient",
+            select: "firstName lastName",
+          },
+        },
+      })
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit);
+
+    res.json({
+      success: true,
+      data: orders,
+      pages: Math.ceil(total / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // GET LAB ORDER BY ID
 const getLabOrder = async (req, res, next) => {
   try {
@@ -171,7 +206,7 @@ const searchLabOrders = async (req, res, next) => {
     }
 
     const results = await LabOrder.aggregate([
-      { $match: { hospital: req.user.hospital, isDeleted: false } },
+      { $match: { hospital: req.user.hospital,  } },
 
       // FIX: join diagnosis → visit → patient
       {
@@ -249,6 +284,7 @@ const searchLabOrders = async (req, res, next) => {
 
 module.exports = {
   createLabOrder,
+  getAllLabOrders,
   getLabOrder,
   getDiagnosisLabOrders,
   updateLabOrder,
