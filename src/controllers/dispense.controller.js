@@ -150,14 +150,15 @@ const getDispenses = async (req, res, next) => {
     ]);
 
     const formatted = records.map((r) => ({
-      ...r,
-      dispensedBy: r.dispensedBy
-        ? {
-            ...r.dispensedBy,
-            name: `${r.dispensedBy.firstName} ${r.dispensedBy.lastName}`,
-          }
-        : null,
-    }));
+  ...r,
+  totalAmount: r.totalAmount / 100, 
+  dispensedBy: r.dispensedBy
+    ? {
+        ...r.dispensedBy,
+        name: `${r.dispensedBy.firstName} ${r.dispensedBy.lastName}`,
+      }
+    : null,
+}));
 
     res.status(200).json({
       success: true,
