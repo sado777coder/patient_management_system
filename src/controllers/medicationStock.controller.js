@@ -33,7 +33,7 @@ const getAllMedications = async (req, res) => {
     const total = await MedicationStock.countDocuments(query);
     const totalPages = Math.ceil(total / limit);
 
-    const medications = await MedicationStock.find(query, {
+    const medications = await MedicationStock.find({query, 
        hospital: req.user.hospital})
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -71,13 +71,11 @@ const updateMedication = async (req, res) => {
     const { error } = updateMedicationStockValidator.validate(req.body);
     if (error) return res.status(400).json({ error: error.message });
 
-    const medication = await MedicationStock.findByIdAndUpdate(
-      {...req.body,
-  hospital: req.user.hospital},
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const medication = await MedicationStock.findOneAndUpdate(
+  { _id: req.params.id, hospital: req.user.hospital },
+  req.body,
+  { new: true }
+)
 
     if (!medication)
       return res.status(404).json({ error: "Medication not found" });
