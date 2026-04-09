@@ -40,9 +40,10 @@ const getAllMedications = async (req, res) => {
   ...query,
   hospital: req.user.hospital
 })
-  .sort({ createdAt: -1 })
-  .skip((page - 1) * limit)
-  .limit(limit);
+.populate("medication", "name") 
+.sort({ createdAt: -1 })
+.skip((page - 1) * limit)
+.limit(limit);
 
     res.json({
       page,
