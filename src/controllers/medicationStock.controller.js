@@ -30,14 +30,19 @@ const getAllMedications = async (req, res) => {
       query.$text = { $search: search }; // text index on name, batchNumber, etc.
     }
 
-    const total = await MedicationStock.countDocuments(query);
+    const total = await MedicationStock.countDocuments({
+  ...query,
+  hospital: req.user.hospital
+});
     const totalPages = Math.ceil(total / limit);
 
-    const medications = await MedicationStock.find({query, 
-       hospital: req.user.hospital})
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
+    const medications = await MedicationStock.find({
+  ...query,
+  hospital: req.user.hospital
+})
+  .sort({ createdAt: -1 })
+  .skip((page - 1) * limit)
+  .limit(limit);
 
     res.json({
       page,
@@ -54,8 +59,10 @@ const getAllMedications = async (req, res) => {
 // GET ONE
 const getMedicationById = async (req, res) => {
   try {
-    const medication = await MedicationStock.findById(req.params.id, {
-      hospital: req.user.hospital});
+    const medication = await MedicationStock.findOne({
+  _id: req.params.id,
+  hospital: req.user.hospital,
+});
     if (!medication)
       return res.status(404).json({ error: "Medication not found" });
 
