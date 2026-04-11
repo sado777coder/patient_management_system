@@ -5,7 +5,7 @@ const LedgerModel = require("../models/LedgerTransaction");
 const MedicationStock = require("../models/MedicationStock");
 
 /**
- * CREATE DISPENSE (Stock Safe + Ledger Billing + Pesewas)
+ * CREATE DISPENSE 
  */
 const createDispense = async (req, res, next) => {
   const session = await mongoose.startSession();
@@ -24,15 +24,14 @@ const createDispense = async (req, res, next) => {
       const processedItems = [];
 
       for (const item of items) {
-       const medication = await MedicationStock.findOne({
-        _id: item.medication,
-        hospital: req.user.hospital,
-      })
-      .populate("medication", "name")
-      .session(session);
+        const medication = await MedicationStock.findOne({
+          _id: item.medication,
+          hospital: req.user.hospital,
+        })
+          .populate("medication", "name")
+          .session(session);
 
-        if (!medication)
-          throw new Error("Medication not found");
+        if (!medication) throw new Error("Medication not found");
 
         if (medication.quantity < item.quantity)
           throw new Error(
@@ -42,13 +41,11 @@ const createDispense = async (req, res, next) => {
         if (medication.expiryDate && medication.expiryDate < new Date())
           throw new Error(`${medication.medication?.name} is expired`);
 
-        //  ALWAYS TRUST DATABASE PRICE
         const priceInPesewas = Math.round(medication.unitPrice * 100);
         const amount = priceInPesewas * item.quantity;
 
         totalAmount += amount;
 
-        // Deduct stock
         medication.quantity -= item.quantity;
         await medication.save({ session });
 
@@ -60,14 +57,16 @@ const createDispense = async (req, res, next) => {
       }
 
       const dispense = await DispenseModel.create(
-        [{
-          hospital: req.user.hospital,
-          patient,
-          prescription,
-          items: processedItems,
-          totalAmount,
-          dispensedBy: req.user._id,
-        }],
+        [
+          {
+            hospital: req.user.hospital,
+            patient,
+            prescription,
+            items: processedItems,
+            totalAmount,
+            dispensedBy: req.user._id,
+          },
+        ],
         { session }
       );
 
@@ -86,19 +85,20 @@ const createDispense = async (req, res, next) => {
         account = created[0];
       }
 
-      if (account.isFrozen)
-        throw new Error("Account is frozen");
+      if (account.isFrozen) throw new Error("Account is frozen");
 
       await LedgerModel.create(
-        [{
-          hospital: req.user.hospital,
-          account: account._id,
-          patient,
-          type: "charge",
-          amount: totalAmount,
-          description: "Medication Dispense",
-          createdBy: req.user._id,
-        }],
+        [
+          {
+            hospital: req.user.hospital,
+            account: account._id,
+            patient,
+            type: "charge",
+            amount: totalAmount,
+            description: "Medication Dispense",
+            createdBy: req.user._id,
+          },
+        ],
         { session }
       );
 
@@ -108,13 +108,12 @@ const createDispense = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: "Medication dispensed. Bill added successfully.",
+      message: "Medication dispensed",
       data: {
         ...createdDispense.toObject(),
         totalAmount: createdDispense.totalAmount / 100,
       },
     });
-
   } catch (err) {
     next(err);
   } finally {
@@ -122,9 +121,8 @@ const createDispense = async (req, res, next) => {
   }
 };
 
-
 /**
- * GET DISPENSE HISTORY
+ * GET DISPENSES 
  */
 const getDispenses = async (req, res, next) => {
   try {
@@ -132,15 +130,16 @@ const getDispenses = async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 10, 100);
     const skip = (page - 1) * limit;
 
-    const search = req.query.q?.trim();
-
-    let filter = { hospital: req.user.hospital };
+    const filter = {
+      hospital: req.user.hospital,
+      isDeleted: false, 
+    };
 
     const [records, total] = await Promise.all([
       DispenseModel.find(filter)
-        .populate("patient", "firstName lastName")
-        .populate("dispensedBy", "firstName lastName email")
-        .populate("items.medication", "name batchNumber unitPrice")
+        .populate("patient", "firstName lastName registrationNumber") 
+        .populate("dispensedBy", "firstName lastName")
+        .populate("items.medication", "name")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -150,19 +149,12 @@ const getDispenses = async (req, res, next) => {
     ]);
 
     const formatted = records.map((r) => ({
-  ...r,
-  totalAmount: r.totalAmount / 100, 
-  dispensedBy: r.dispensedBy
-    ? {
-        ...r.dispensedBy,
-        name: `${r.dispensedBy.firstName} ${r.dispensedBy.lastName}`,
-      }
-    : null,
-}));
+      ...r,
+      totalAmount: r.totalAmount / 100,
+    }));
 
-    res.status(200).json({
+    res.json({
       success: true,
-      message: "DISPENSE HISTORY",
       data: formatted,
       meta: {
         total,
@@ -171,36 +163,90 @@ const getDispenses = async (req, res, next) => {
         limit,
       },
     });
-
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * SEARCH DISPENSES
+ * UPDATE DISPENSE (SAFE UPDATE LIKE PRESCRIPTION)
+ */
+const updateDispense = async (req, res, next) => {
+  try {
+    delete req.body.hospital;
+    delete req.body.patient;
+    delete req.body.totalAmount;
+    delete req.body.dispensedBy;
+    delete req.body.isDeleted;
+
+    const updated = await DispenseModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      req.body,
+      { new: true }
+    );
+
+    if (!updated)
+      return res.status(404).json({
+        success: false,
+        message: "Dispense not found",
+      });
+
+    res.json({
+      success: true,
+      message: "Dispense updated",
+      data: updated,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * SOFT DELETE
+ */
+const deleteDispense = async (req, res, next) => {
+  try {
+    const deleted = await DispenseModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        hospital: req.user.hospital,
+        isDeleted: false,
+      },
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+      { new: true }
+    );
+
+    if (!deleted)
+      return res.status(404).json({
+        success: false,
+        message: "Dispense not found",
+      });
+
+    res.json({
+      success: true,
+      message: "Deleted",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * SEARCH (NOW SUPPORT REGISTRATION NUMBER)
  */
 const searchDispenses = async (req, res, next) => {
   try {
     const keyword = req.query.q?.trim();
 
-    if (!keyword) {
-      return res.status(400).json({
-        success: false,
-        message: "Search query required",
-      });
-    }
-
-    const matchConditions = [
-      { "patient.firstName": { $regex: keyword, $options: "i" } },
-      { "patient.lastName": { $regex: keyword, $options: "i" } },
-      { "patient.registrationNumber": { $regex: keyword, $options: "i" } },
-      { "medications.medication.name": { $regex: keyword, $options: "i" } },
-    ];
-
-    if (mongoose.Types.ObjectId.isValid(keyword)) {
-      matchConditions.push({ _id: new mongoose.Types.ObjectId(keyword) });
-    }
+    if (!keyword)
+      return res.status(400).json({ message: "Search required" });
 
     const results = await DispenseModel.aggregate([
       { $match: { hospital: req.user.hospital, isDeleted: false } },
@@ -216,54 +262,23 @@ const searchDispenses = async (req, res, next) => {
       { $unwind: "$patient" },
 
       {
-        $lookup: {
-          from: "users",
-          localField: "dispensedBy",
-          foreignField: "_id",
-          as: "dispensedBy",
+        $match: {
+          $or: [
+            { "patient.firstName": { $regex: keyword, $options: "i" } },
+            { "patient.lastName": { $regex: keyword, $options: "i" } },
+            { "patient.registrationNumber": { $regex: keyword, $options: "i" } }, 
+          ],
         },
       },
-      { $unwind: { path: "$dispensedBy", preserveNullAndEmptyArrays: true } },
-
-      // FIX: lookup medications
-      {
-        $lookup: {
-          from: "medicationstocks",
-          localField: "items.medication",
-          foreignField: "_id",
-          as: "medications",
-        },
-      },
-
-      {
-        $lookup: {
-          from: "medications",
-          localField: "medications.medication",
-          foreignField: "_id",
-          as: "medications.medication",
-        },
-      },
-
-      { $match: { $or: matchConditions } },
 
       {
         $project: {
-          totalAmount: 1,
+          totalAmount: { $divide: ["$totalAmount", 100] },
           createdAt: 1,
           patient: {
-            _id: "$patient._id",
             firstName: "$patient.firstName",
             lastName: "$patient.lastName",
-          },
-          dispensedBy: {
-            _id: "$dispensedBy._id",
-            name: {
-              $trim: {
-                input: {
-                  $concat: ["$dispensedBy.firstName", " ", "$dispensedBy.lastName"],
-                },
-              },
-            },
+            registrationNumber: "$patient.registrationNumber",
           },
         },
       },
@@ -278,5 +293,7 @@ const searchDispenses = async (req, res, next) => {
 module.exports = {
   createDispense,
   getDispenses,
-  searchDispenses
+  updateDispense,
+  deleteDispense,
+  searchDispenses,
 };

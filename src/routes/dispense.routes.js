@@ -9,7 +9,9 @@ const allowRoles = require("../middlewares/rbac");
 const {
   createDispense,
   getDispenses,
-  searchDispenses
+  searchDispenses,
+  updateDispense,
+  deleteDispense
 } = require("../controllers/dispense.controller");
 
 const { createDispenseValidator } = require("../validators/dispense.validator");
@@ -28,5 +30,16 @@ router.post(
 router.get("/search", searchDispenses);
 
 router.get("/", getDispenses);
+
+router.put("/:id", 
+  allowRoles(permissions.DISPENSE),
+  updateDispense
+
+);
+
+router.delete("/:id",
+  allowRoles(permissions.DISPENSE),
+  deleteDispense
+);
 
 module.exports = router;
