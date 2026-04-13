@@ -10,8 +10,12 @@ const PORT = process.env.PORT || 3004;
 const startServer = async () => {
     try {
         await connectDB();
-        await unitSeeds();
         await seedSuperAdmin();
+        const Hospital = require("./src/models/Hospital");
+
+const hospital = await Hospital.findOne(); 
+
+await unitSeeds(hospital._id);
         app.listen(PORT, () => {
             console.log(`Server is listening on ${PORT}`);
         })
