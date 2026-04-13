@@ -14,31 +14,31 @@ const {
 
 router.use(requireAuth);
 
-// create
+// CREATE
 router.post(
   "/",
   allowRoles(permissions.REGISTER_PATIENT),
   createUnit
 );
 
-// list
+// GET ALL
 router.get("/", getUnits);
 
-// update
+// UPDATE
 router.put(
   "/:id",
   allowRoles(permissions.REGISTER_PATIENT),
   updateUnit
 );
 
-// activate/deactivate
+// TOGGLE STATUS
 router.patch(
   "/:id/status",
   allowRoles(permissions.REGISTER_PATIENT),
   toggleUnitStatus
 );
 
-// soft delete
+// DELETE (SOFT)
 router.delete(
   "/:id",
   allowRoles(permissions.REGISTER_PATIENT),
