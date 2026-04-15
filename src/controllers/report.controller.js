@@ -1,5 +1,6 @@
 const { Parser } = require("json2csv");
 const crypto = require("crypto");
+
 const Dispense = require("../models/Dispense");
 const Patient = require("../models/Patient");
 const Prescription = require("../models/Prescription");
@@ -29,6 +30,34 @@ const sendCSV = (res, rows, filename, fields) => {
 const formatDate = (date) =>
   date ? date.toISOString().slice(0, 10) : "";
 
+// ---------------------- FILTER BUILDER (FIXED) ----------------------
+const applyCommonFilters = (query, hospital, allowSearch = false) => {
+  const { from, to, unit, q } = query;
+
+  const filter = { hospital };
+
+  if (from || to) {
+    filter.createdAt = {};
+    if (from) filter.createdAt.$gte = new Date(from);
+    if (to) filter.createdAt.$lte = new Date(to);
+  }
+
+  if (unit) {
+    filter.unit = unit;
+  }
+
+  if (allowSearch && q) {
+    const regex = new RegExp(q, "i");
+    filter.$or = [
+      { firstName: regex },
+      { lastName: regex },
+      { phone: regex }
+    ];
+  }
+
+  return filter;
+};
+
 // ---------------------- REDIS CACHING HELPER ----------------------
 const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
   const sortedQuery = Object.keys(query || {})
@@ -50,33 +79,22 @@ const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
 
   const rows = await generatorFn();
 
-  await redis.set(cacheKey, JSON.stringify(rows), "EX", 600); // 10 minutes
-
+  await redis.set(cacheKey, JSON.stringify(rows), "EX", 600);
   return rows;
 };
 
 // ---------------------- PATIENTS ----------------------
 const exportPatientsCSV = async (req, res, next) => {
   try {
-    const { from, to, unit, q } = req.query;
-    const filter = { isDeleted: false, hospital: req.user.hospital };
-    if (from || to) filter.createdAt = {};
-    if (from) filter.createdAt.$gte = new Date(from);
-    if (to) filter.createdAt.$lte = new Date(to);
-    if (unit) filter.unit = unit;
-
-    if (q) {
-      const regex = new RegExp(q, "i");
-      filter.$or = [
-        { firstName: regex },
-        { lastName: regex },
-        { phone: regex }
-      ];
-    }
+    const filter = applyCommonFilters(req.query, req.user.hospital, true);
+    filter.isDeleted = false;
 
     const rows = await cacheCSV("patients", req.user.hospital, req.query, async () => {
-      const patients = await Patient.find(filter).populate("unit", "name code").lean();
-      return patients.map((p) => ({
+      const patients = await Patient.find(filter)
+        .populate("unit", "name code")
+        .lean();
+
+      return patients.map(p => ({
         hospital: p.hospital || "",
         firstName: p.firstName || "",
         lastName: p.lastName || "",
@@ -84,16 +102,17 @@ const exportPatientsCSV = async (req, res, next) => {
         gender: p.gender || "",
         unit: p.unit?.name || "",
         unitCode: p.unit?.code || "",
-        createdAt: p.createdAt?.toISOString().slice(0, 10) || "",
+        createdAt: formatDate(p.createdAt),
       }));
     });
 
-    const fields = ["hospital","firstName","lastName","phone","gender","unit","unitCode","createdAt"];
-    sendCSV(res, rows, "patients-report.csv", fields);
+    sendCSV(res, rows, "patients-report.csv", [
+      "hospital","firstName","lastName","phone","gender","unit","unitCode","createdAt"
+    ]);
   } catch (err) { next(err); }
 };
 
-//------------------------Export diagnoses-------------------
+// ---------------------- DIAGNOSIS ----------------------
 const exportDiagnosisCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("diagnoses", req.user.hospital, req.query, async () => {
@@ -114,13 +133,13 @@ const exportDiagnosisCSV = async (req, res, next) => {
         diagnosis: d.diagnosis || "",
         investigations: d.investigations?.join("; ") || "",
         notes: d.notes || "",
-        date: d.createdAt?.toISOString().slice(0,10) || ""
+        date: formatDate(d.createdAt)
       }));
     });
 
-    const fields = ["hospital","patient","diagnosedBy","symptoms","signs","diagnosis","investigations","notes","date"];
-    sendCSV(res, rows, "diagnoses-report.csv", fields);
-
+    sendCSV(res, rows, "diagnoses-report.csv", [
+      "hospital","patient","diagnosedBy","symptoms","signs","diagnosis","investigations","notes","date"
+    ]);
   } catch (err) { next(err); }
 };
 
@@ -128,47 +147,41 @@ const exportDiagnosisCSV = async (req, res, next) => {
 const exportPrescriptionsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("prescriptions", req.user.hospital, req.query, async () => {
-      // Find prescriptions for this hospital that aren't deleted
       const prescriptions = await Prescription.find({
         hospital: req.user.hospital,
         isDeleted: false
       })
-      .populate({
-        path: "visit",
-        populate: { path: "patient", select: "hospital firstName lastName" }
-      })
-      .populate({
-        path: "medications.medication",
-        model: "Medication",   // explicitly specify the model
-        select: "name"
-      })
-      .lean(); // lean() at the end for plain JS objects
+        .populate({
+          path: "visit",
+          populate: { path: "patient", select: "hospital firstName lastName" }
+        })
+        .populate({
+          path: "medications.medication",
+          model: "Medication",
+          select: "name"
+        })
+        .lean();
 
-      // Flatten medications array for CSV rows
-      const csvRows = prescriptions.flatMap(prescription =>
-        (prescription.medications || []).map(med => ({
-          hospital: prescription.visit?.patient?.hospital || "",
-          patient: `${prescription.visit?.patient?.firstName || ""} ${prescription.visit?.patient?.lastName || ""}`,
-          medication: med.medication?.name || "Unknown Medication", // fallback if not populated
-          dosage: med.dosage || "",
-          frequency: med.frequency || "",
-          duration: med.duration || "",
-          date: prescription.createdAt?.toISOString().slice(0, 10) || ""
+      return prescriptions.flatMap(p =>
+        (p.medications || []).map(m => ({
+          hospital: p.visit?.patient?.hospital || "",
+          patient: `${p.visit?.patient?.firstName || ""} ${p.visit?.patient?.lastName || ""}`,
+          medication: m.medication?.name || "Unknown Medication",
+          dosage: m.dosage || "",
+          frequency: m.frequency || "",
+          duration: m.duration || "",
+          date: formatDate(p.createdAt)
         }))
       );
-
-      return csvRows;
     });
 
-    const fields = ["hospital","patient","medication","dosage","frequency","duration","date"];
-    sendCSV(res, rows, "prescriptions-report.csv", fields);
-
-  } catch (err) {
-    next(err);
-  }
+    sendCSV(res, rows, "prescriptions-report.csv", [
+      "hospital","patient","medication","dosage","frequency","duration","date"
+    ]);
+  } catch (err) { next(err); }
 };
 
-// ---------------------- LAB RESULTS ----------------------
+// ---------------------- LABS ----------------------
 const exportLabsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("labs", req.user.hospital, req.query, async () => {
@@ -176,24 +189,25 @@ const exportLabsCSV = async (req, res, next) => {
         .populate({
           path: "patient",
           match: { hospital: req.user.hospital },
-          select: "hospital firstName lastName",
+          select: "hospital firstName lastName"
         })
         .lean();
 
-      const filtered = data.filter(l => l.patient);
-
-      return filtered.map(l => ({
-        hospital: l.patient?.hospital || "",
-        patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
-        test: l.testName,
-        result: l.result,
-        status: l.status,
-        date: l.createdAt?.toISOString().slice(0,10)
-      }));
+      return data
+        .filter(l => l.patient)
+        .map(l => ({
+          hospital: l.patient?.hospital || "",
+          patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
+          test: l.testName,
+          result: l.result,
+          status: l.status,
+          date: formatDate(l.createdAt)
+        }));
     });
 
-    const fields = ["hospital","patient","test","result","status","date"];
-    sendCSV(res, rows, "labs-report.csv", fields);
+    sendCSV(res, rows, "labs-report.csv", [
+      "hospital","patient","test","result","status","date"
+    ]);
   } catch (err) { next(err); }
 };
 
@@ -211,12 +225,13 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
         diagnosis: r.diagnosis,
         notes: r.notes,
         doctor: r.doctor,
-        date: r.createdAt?.toISOString().slice(0,10)
+        date: formatDate(r.createdAt)
       }));
     });
 
-    const fields = ["hospital","patient","diagnosis","notes","doctor","date"];
-    sendCSV(res, rows, "medical-records-report.csv", fields);
+    sendCSV(res, rows, "medical-records-report.csv", [
+      "hospital","patient","diagnosis","notes","doctor","date"
+    ]);
   } catch (err) { next(err); }
 };
 
@@ -233,27 +248,29 @@ const exportDispenseCSV = async (req, res, next) => {
         })
         .lean();
 
-      return data.flatMap(dispense =>
-        (dispense.items || []).map(item => ({
-          hospital: dispense.patient?.hospital || "",
-          patient: `${dispense.patient?.firstName || ""} ${dispense.patient?.lastName || ""}`,
-          medication: item.medication?.medication?.name || "",
-          quantity: item.quantity || 0,
-          unitPrice: item.price || 0,
-          totalAmount: dispense.totalAmount || 0,
-          dispensedBy: dispense.dispensedBy?.name || "",
-          date: dispense.createdAt?.toISOString().slice(0,10) || ""
+      return data.flatMap(d =>
+        (d.items || []).map(i => ({
+          hospital: d.patient?.hospital || "",
+          patient: `${d.patient?.firstName || ""} ${d.patient?.lastName || ""}`,
+          medication: i.medication?.medication?.name || "",
+          quantity: i.quantity || 0,
+          unitPrice: i.price || 0,
+          totalAmount: d.totalAmount || 0,
+          dispensedBy: d.dispensedBy?.name || "",
+          date: formatDate(d.createdAt)
         }))
       );
     });
 
-    const fields = ["hospital","patient","medication","quantity","unitPrice","totalAmount","dispensedBy","date"];
-    sendCSV(res, rows, "dispense-report.csv", fields);
-
+    sendCSV(res, rows, "dispense-report.csv", [
+      "hospital","patient","medication","quantity","unitPrice","totalAmount","dispensedBy","date"
+    ]);
   } catch (err) { next(err); }
 };
 
-// ---------------------- MATERNITY EXPORTS ----------------------
+// ---------------------- MATERNITY  ----------------------
+
+// Antenatal
 const exportAntenatalCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("antenatal", req.user.hospital, req.query, async () => {
@@ -265,26 +282,28 @@ const exportAntenatalCSV = async (req, res, next) => {
         })
         .lean();
 
-      const filtered = visits.filter(v => v.pregnancy);
-
-      return filtered.map(v => ({
-        hospital: v.pregnancy?.hospital || "",
-        patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
-        visitDate: formatDate(v.visitDate),
-        gestationalAgeWeeks: v.gestationalAgeWeeks || "",
-        bloodPressure: v.bloodPressure || "",
-        weight: v.weight || "",
-        fetalHeartRate: v.fetalHeartRate || "",
-        riskLevel: v.riskLevel || "",
-        notes: v.notes || ""
-      }));
+      return visits
+        .filter(v => v.pregnancy)
+        .map(v => ({
+          hospital: v.pregnancy?.hospital || "",
+          patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
+          visitDate: formatDate(v.visitDate),
+          gestationalAgeWeeks: v.gestationalAgeWeeks || "",
+          bloodPressure: v.bloodPressure || "",
+          weight: v.weight || "",
+          fetalHeartRate: v.fetalHeartRate || "",
+          riskLevel: v.riskLevel || "",
+          notes: v.notes || ""
+        }));
     });
 
-    const fields = ["hospital","patient","visitDate","gestationalAgeWeeks","bloodPressure","weight","fetalHeartRate","riskLevel","notes"];
-    sendCSV(res, rows, "antenatal-visits-report.csv", fields);
+    sendCSV(res, rows, "antenatal-visits-report.csv", [
+      "hospital","patient","visitDate","gestationalAgeWeeks","bloodPressure","weight","fetalHeartRate","riskLevel","notes"
+    ]);
   } catch (err) { next(err); }
 };
 
+// Abortion
 const exportAbortionsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("abortions", req.user.hospital, req.query, async () => {
@@ -296,24 +315,26 @@ const exportAbortionsCSV = async (req, res, next) => {
         })
         .lean();
 
-      const filtered = abortions.filter(a => a.pregnancy);
-
-      return filtered.map(a => ({
-        hospital: a.pregnancy?.hospital || "",
-        patient: `${a.pregnancy?.patient?.firstName || ""} ${a.pregnancy?.patient?.lastName || ""}`,
-        date: formatDate(a.date),
-        type: a.type || "",
-        gestationalAgeWeeks: a.gestationalAgeWeeks || "",
-        complications: a.complications || "",
-        notes: a.notes || ""
-      }));
+      return abortions
+        .filter(a => a.pregnancy)
+        .map(a => ({
+          hospital: a.pregnancy?.hospital || "",
+          patient: `${a.pregnancy?.patient?.firstName || ""} ${a.pregnancy?.patient?.lastName || ""}`,
+          date: formatDate(a.date),
+          type: a.type || "",
+          gestationalAgeWeeks: a.gestationalAgeWeeks || "",
+          complications: a.complications || "",
+          notes: a.notes || ""
+        }));
     });
 
-    const fields = ["hospital","patient","date","type","gestationalAgeWeeks","complications","notes"];
-    sendCSV(res, rows, "abortions-report.csv", fields);
+    sendCSV(res, rows, "abortions-report.csv", [
+      "hospital","patient","date","type","gestationalAgeWeeks","complications","notes"
+    ]);
   } catch (err) { next(err); }
 };
 
+// Delivery
 const exportDeliveriesCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("deliveries", req.user.hospital, req.query, async () => {
@@ -325,24 +346,26 @@ const exportDeliveriesCSV = async (req, res, next) => {
         })
         .lean();
 
-      const filtered = deliveries.filter(d => d.pregnancy);
-
-      return filtered.map(d => ({
-        hospital: d.pregnancy?.hospital || "",
-        patient: `${d.pregnancy?.patient?.firstName || ""} ${d.pregnancy?.patient?.lastName || ""}`,
-        deliveryDate: formatDate(d.deliveryDate),
-        type: d.type || "",
-        babyWeight: d.babyWeight || "",
-        babyGender: d.babyGender || "",
-        complications: d.complications || ""
-      }));
+      return deliveries
+        .filter(d => d.pregnancy)
+        .map(d => ({
+          hospital: d.pregnancy?.hospital || "",
+          patient: `${d.pregnancy?.patient?.firstName || ""} ${d.pregnancy?.patient?.lastName || ""}`,
+          deliveryDate: formatDate(d.deliveryDate),
+          type: d.type || "",
+          babyWeight: d.babyWeight || "",
+          babyGender: d.babyGender || "",
+          complications: d.complications || ""
+        }));
     });
 
-    const fields = ["hospital","patient","deliveryDate","type","babyWeight","babyGender","complications"];
-    sendCSV(res, rows, "deliveries-report.csv", fields);
+    sendCSV(res, rows, "deliveries-report.csv", [
+      "hospital","patient","deliveryDate","type","babyWeight","babyGender","complications"
+    ]);
   } catch (err) { next(err); }
 };
 
+// Postnatal
 const exportPostnatalCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("postnatal", req.user.hospital, req.query, async () => {
@@ -354,25 +377,27 @@ const exportPostnatalCSV = async (req, res, next) => {
         })
         .lean();
 
-      const filtered = visits.filter(v => v.pregnancy);
-
-      return filtered.map(v => ({
-        hospital: v.pregnancy?.hospital || "",
-        patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
-        visitDate: formatDate(v.visitDate),
-        motherCondition: v.motherCondition || "",
-        bloodPressure: v.bloodPressure || "",
-        temperature: v.temperature || "",
-        complications: v.complications || "",
-        notes: v.notes || ""
-      }));
+      return visits
+        .filter(v => v.pregnancy)
+        .map(v => ({
+          hospital: v.pregnancy?.hospital || "",
+          patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
+          visitDate: formatDate(v.visitDate),
+          motherCondition: v.motherCondition || "",
+          bloodPressure: v.bloodPressure || "",
+          temperature: v.temperature || "",
+          complications: v.complications || "",
+          notes: v.notes || ""
+        }));
     });
 
-    const fields = ["hospital","patient","visitDate","motherCondition","bloodPressure","temperature","complications","notes"];
-    sendCSV(res, rows, "postnatal-visits-report.csv", fields);
+    sendCSV(res, rows, "postnatal-visits-report.csv", [
+      "hospital","patient","visitDate","motherCondition","bloodPressure","temperature","complications","notes"
+    ]);
   } catch (err) { next(err); }
 };
 
+// Referrals
 const exportReferralsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("referrals", req.user.hospital, req.query, async () => {
@@ -384,21 +409,22 @@ const exportReferralsCSV = async (req, res, next) => {
         })
         .lean();
 
-      const filtered = referrals.filter(r => r.pregnancy);
-
-      return filtered.map(r => ({
-        hospital: r.pregnancy?.hospital || "",
-        patient: `${r.pregnancy?.patient?.firstName || ""} ${r.pregnancy?.patient?.lastName || ""}`,
-        referredTo: r.referredTo || "",
-        reason: r.reason || "",
-        referralDate: formatDate(r.referralDate),
-        status: r.status || "",
-        notes: r.notes || ""
-      }));
+      return referrals
+        .filter(r => r.pregnancy)
+        .map(r => ({
+          hospital: r.pregnancy?.hospital || "",
+          patient: `${r.pregnancy?.patient?.firstName || ""} ${r.pregnancy?.patient?.lastName || ""}`,
+          referredTo: r.referredTo || "",
+          reason: r.reason || "",
+          referralDate: formatDate(r.referralDate),
+          status: r.status || "",
+          notes: r.notes || ""
+        }));
     });
 
-    const fields = ["hospital","patient","referredTo","reason","referralDate","status","notes"];
-    sendCSV(res, rows, "referrals-report.csv", fields);
+    sendCSV(res, rows, "referrals-report.csv", [
+      "hospital","patient","referredTo","reason","referralDate","status","notes"
+    ]);
   } catch (err) { next(err); }
 };
 
