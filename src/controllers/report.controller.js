@@ -12,7 +12,6 @@ const AntenatalVisit = require("../models/AntenatalVisit");
 const Delivery = require("../models/Delivery");
 const PostnatalVisit = require("../models/PostnatalVisit");
 const Referral = require("../models/Referral");
-const Pregnancy = require("../models/Pregnancy");
 const redis = require("../config/redis");
 
 // ---------------------- SHARED CSV HELPER ----------------------
@@ -56,6 +55,20 @@ const applyCommonFilters = (query, hospital, allowSearch = false) => {
   return filter;
 };
 
+// ---------------------- DATE FILTER (FOR MATERNITY) ----------------------
+const applyDateFilter = (field, query) => {
+  const { from, to } = query;
+
+  if (!from && !to) return {};
+
+  return {
+    [field]: {
+      ...(from && { $gte: new Date(from) }),
+      ...(to && { $lte: new Date(to) })
+    }
+  };
+};
+
 // ---------------------- REDIS CACHE ----------------------
 const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
   const sortedQuery = Object.keys(query || {})
@@ -81,10 +94,13 @@ const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
   return rows;
 };
 
-// ---------------------- PREVIEW HELPER (ALL MODELS) ----------------------
-const makePreview = (Model, populate = null) => async (req, res, next) => {
+// ---------------------- PREVIEW HELPER ----------------------
+const makePreview = (Model, populate = null, allowSearch = false) => async (req, res, next) => {
   try {
-    let query = Model.find({ hospital: req.user.hospital }).limit(50);
+    const filter = applyCommonFilters(req.query, req.user.hospital, allowSearch);
+
+    let query = Model.find(filter).limit(50);
+
     if (populate) query = query.populate(populate);
 
     const data = await query.lean();
@@ -128,8 +144,10 @@ const exportPatientsCSV = async (req, res, next) => {
 // DIAGNOSIS
 const exportDiagnosisCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("diagnoses", req.user.hospital, req.query, async () => {
-      const data = await Diagnosis.find({ hospital: req.user.hospital })
+      const data = await Diagnosis.find(filter)
         .populate({ path: "visit", populate: { path: "patient" } })
         .populate("diagnosedBy", "name")
         .lean();
@@ -156,9 +174,11 @@ const exportDiagnosisCSV = async (req, res, next) => {
 // PRESCRIPTIONS
 const exportPrescriptionsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("prescriptions", req.user.hospital, req.query, async () => {
       const prescriptions = await Prescription.find({
-        hospital: req.user.hospital,
+        ...filter,
         isDeleted: false
       })
         .populate({ path: "visit", populate: { path: "patient" } })
@@ -184,12 +204,17 @@ const exportPrescriptionsCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// LABS
+// LABS 
 const exportLabsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("labs", req.user.hospital, req.query, async () => {
-      const data = await Lab.find({})
-        .populate({ path: "patient", match: { hospital: req.user.hospital } })
+      const data = await Lab.find()
+        .populate({
+          path: "patient",
+          match: filter
+        })
         .lean();
 
       return data.filter(l => l.patient).map(l => ({
@@ -211,8 +236,10 @@ const exportLabsCSV = async (req, res, next) => {
 // MEDICAL RECORDS
 const exportMedicalRecordsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("medical", req.user.hospital, req.query, async () => {
-      const data = await MedicalRecord.find({ hospital: req.user.hospital })
+      const data = await MedicalRecord.find(filter)
         .populate("patient")
         .lean();
 
@@ -235,8 +262,10 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
 // DISPENSE
 const exportDispenseCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("dispense", req.user.hospital, req.query, async () => {
-      const data = await Dispense.find({ hospital: req.user.hospital })
+      const data = await Dispense.find(filter)
         .populate("patient")
         .populate("dispensedBy")
         .populate({ path: "items.medication", populate: { path: "medication" } })
@@ -266,10 +295,13 @@ const exportDispenseCSV = async (req, res, next) => {
 // ===================== MATERNITY =======================
 // ======================================================
 
+// ANTENATAL 
 const exportAntenatalCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("antenatal", req.user.hospital, req.query, async () => {
-      const visits = await AntenatalVisit.find()
+      const visits = await AntenatalVisit.find({
+        ...applyDateFilter("visitDate", req.query)
+      })
         .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
         .lean();
 
@@ -290,10 +322,13 @@ const exportAntenatalCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// ABORTIONS 
 const exportAbortionsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("abortions", req.user.hospital, req.query, async () => {
-      const data = await Abortion.find()
+      const data = await Abortion.find({
+        ...applyDateFilter("date", req.query)
+      })
         .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
         .lean();
 
@@ -310,10 +345,13 @@ const exportAbortionsCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// DELIVERIES 
 const exportDeliveriesCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("deliveries", req.user.hospital, req.query, async () => {
-      const data = await Delivery.find()
+      const data = await Delivery.find({
+        ...applyDateFilter("deliveryDate", req.query)
+      })
         .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
         .lean();
 
@@ -331,10 +369,13 @@ const exportDeliveriesCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// POSTNATAL 
 const exportPostnatalCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("postnatal", req.user.hospital, req.query, async () => {
-      const data = await PostnatalVisit.find()
+      const data = await PostnatalVisit.find({
+        ...applyDateFilter("visitDate", req.query)
+      })
         .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
         .lean();
 
@@ -351,10 +392,13 @@ const exportPostnatalCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// REFERRALS 
 const exportReferralsCSV = async (req, res, next) => {
   try {
     const rows = await cacheCSV("referrals", req.user.hospital, req.query, async () => {
-      const data = await Referral.find()
+      const data = await Referral.find({
+        ...applyDateFilter("referralDate", req.query)
+      })
         .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
         .lean();
 
@@ -372,10 +416,10 @@ const exportReferralsCSV = async (req, res, next) => {
 };
 
 // ======================================================
-// ===================== PREVIEWS (ALL) ==================
+// ===================== PREVIEWS ========================
 // ======================================================
 
-const previewPatients = makePreview(Patient, "unit");
+const previewPatients = makePreview(Patient, "unit", true);
 const previewDiagnosis = makePreview(Diagnosis, { path: "visit", populate: { path: "patient" } });
 const previewPrescriptions = makePreview(Prescription, { path: "visit", populate: { path: "patient" } });
 const previewLabs = makePreview(Lab, "patient");
