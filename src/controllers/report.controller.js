@@ -28,25 +28,68 @@ const sendCSV = (res, rows, filename, fields) => {
 const formatDate = (date) =>
   date ? date.toISOString().slice(0, 10) : "";
 
-// ---------------------- DATE FILTER ----------------------
-const buildDateFilter = (query, field = "createdAt") => {
+// ---------------------- COMMON FILTER ----------------------
+const applyCommonFilters = (query, hospital, allowSearch = false) => {
+  const { from, to, unit, q } = query;
+
+  const filter = { hospital };
+
+  if (from || to) {
+    filter.createdAt = {};
+
+    if (from) {
+      const start = new Date(from);
+      start.setHours(0, 0, 0, 0);
+      filter.createdAt.$gte = start;
+    }
+
+    if (to) {
+      const end = new Date(to);
+      end.setHours(23, 59, 59, 999);
+      filter.createdAt.$lte = end;
+    }
+  }
+
+  if (unit) filter.unit = unit;
+
+  if (allowSearch && q) {
+    const regex = new RegExp(q, "i");
+    filter.$or = [
+      { firstName: regex },
+      { lastName: regex },
+      { phone: regex }
+    ];
+  }
+
+  return filter;
+};
+
+// ---------------------- MATERNITY DATE FILTER ----------------------
+const applyDateFilter = (field, query) => {
   const { from, to } = query;
 
   if (!from && !to) return {};
 
   return {
     [field]: {
-      ...(from && { $gte: new Date(from) }),
-      ...(to && { $lte: new Date(to) })
+      ...(from && { $gte: new Date(from + "T00:00:00.000Z") }),
+      ...(to && { $lte: new Date(to + "T23:59:59.999Z") })
     }
   };
 };
 
 // ---------------------- CACHE ----------------------
 const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
+  const sortedQuery = Object.keys(query || {})
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = query[key];
+      return acc;
+    }, {});
+
   const hash = crypto
     .createHash("md5")
-    .update(JSON.stringify(query || {}))
+    .update(JSON.stringify(sortedQuery))
     .digest("hex");
 
   const cacheKey = `csv:${keyPrefix}:${hospital}:${hash}`;
@@ -60,20 +103,17 @@ const cacheCSV = async (keyPrefix, hospital, query, generatorFn) => {
   return rows;
 };
 
-// ---------------------- PREVIEW FIX ----------------------
+// ---------------------- PREVIEW ----------------------
 const makePreview = (Model, populate = null, allowSearch = false) => async (req, res, next) => {
   try {
-    let query = Model.find(buildDateFilter(req.query)).limit(50);
+    const filter = applyCommonFilters(req.query, req.user.hospital, allowSearch);
+
+    let query = Model.find(filter).limit(50);
 
     if (populate) query = query.populate(populate);
 
     const data = await query.lean();
-
-    const filtered = data.filter(d =>
-      JSON.stringify(d).includes(req.user.hospital.toString())
-    );
-
-    res.json(filtered);
+    res.json(data);
   } catch (err) {
     next(err);
   }
@@ -83,18 +123,16 @@ const makePreview = (Model, populate = null, allowSearch = false) => async (req,
 // ===================== CSV EXPORTS =====================
 // ======================================================
 
-// PATIENTS (unchanged - already correct)
+// PATIENTS
 const exportPatientsCSV = async (req, res, next) => {
   try {
-    const filter = {
-      hospital: req.user.hospital,
-      ...buildDateFilter(req.query),
-      ...(req.query.unit && { unit: req.query.unit }),
-      isDeleted: false
-    };
+    const filter = applyCommonFilters(req.query, req.user.hospital, true);
+    filter.isDeleted = false;
 
     const rows = await cacheCSV("patients", req.user.hospital, req.query, async () => {
-      const patients = await Patient.find(filter).populate("unit", "name code").lean();
+      const patients = await Patient.find(filter)
+        .populate("unit", "name code")
+        .lean();
 
       return patients.map(p => ({
         hospital: p.hospital || "",
@@ -117,31 +155,25 @@ const exportPatientsCSV = async (req, res, next) => {
 // DIAGNOSIS
 const exportDiagnosisCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("diagnoses", req.user.hospital, req.query, async () => {
-      const data = await Diagnosis.find(buildDateFilter(req.query))
-        .populate({
-          path: "visit",
-          populate: {
-            path: "patient",
-            match: { hospital: req.user.hospital }
-          }
-        })
+      const data = await Diagnosis.find(filter)
+        .populate({ path: "visit", populate: { path: "patient" } })
         .populate("diagnosedBy", "name")
         .lean();
 
-      return data
-        .filter(d => d.visit?.patient)
-        .map(d => ({
-          hospital: d.visit.patient.hospital || "",
-          patient: `${d.visit.patient.firstName || ""} ${d.visit.patient.lastName || ""}`,
-          diagnosedBy: d.diagnosedBy?.name || "",
-          symptoms: d.symptoms || "",
-          signs: d.signs || "",
-          diagnosis: d.diagnosis || "",
-          investigations: d.investigations?.join("; ") || "",
-          notes: d.notes || "",
-          date: formatDate(d.createdAt)
-        }));
+      return data.map(d => ({
+        hospital: d.hospital || "",
+        patient: `${d.visit?.patient?.firstName || ""} ${d.visit?.patient?.lastName || ""}`,
+        diagnosedBy: d.diagnosedBy?.name || "",
+        symptoms: d.symptoms || "",
+        signs: d.signs || "",
+        diagnosis: d.diagnosis || "",
+        investigations: d.investigations?.join("; ") || "",
+        notes: d.notes || "",
+        date: formatDate(d.createdAt)
+      }));
     });
 
     sendCSV(res, rows, "diagnoses-report.csv", [
@@ -153,34 +185,28 @@ const exportDiagnosisCSV = async (req, res, next) => {
 // PRESCRIPTIONS
 const exportPrescriptionsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("prescriptions", req.user.hospital, req.query, async () => {
-      const data = await Prescription.find({
-        ...buildDateFilter(req.query),
+      const prescriptions = await Prescription.find({
+        ...filter,
         isDeleted: false
       })
-        .populate({
-          path: "visit",
-          populate: {
-            path: "patient",
-            match: { hospital: req.user.hospital }
-          }
-        })
+        .populate({ path: "visit", populate: { path: "patient" } })
         .populate({ path: "medications.medication", select: "name" })
         .lean();
 
-      return data
-        .filter(p => p.visit?.patient)
-        .flatMap(p =>
-          (p.medications || []).map(m => ({
-            hospital: p.visit.patient.hospital || "",
-            patient: `${p.visit.patient.firstName || ""} ${p.visit.patient.lastName || ""}`,
-            medication: m.medication?.name || "",
-            dosage: m.dosage || "",
-            frequency: m.frequency || "",
-            duration: m.duration || "",
-            date: formatDate(p.createdAt)
-          }))
-        );
+      return prescriptions.flatMap(p =>
+        (p.medications || []).map(m => ({
+          hospital: p.visit?.patient?.hospital || "",
+          patient: `${p.visit?.patient?.firstName || ""} ${p.visit?.patient?.lastName || ""}`,
+          medication: m.medication?.name || "",
+          dosage: m.dosage || "",
+          frequency: m.frequency || "",
+          duration: m.duration || "",
+          date: formatDate(p.createdAt)
+        }))
+      );
     });
 
     sendCSV(res, rows, "prescriptions-report.csv", [
@@ -192,24 +218,21 @@ const exportPrescriptionsCSV = async (req, res, next) => {
 // LABS
 const exportLabsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("labs", req.user.hospital, req.query, async () => {
-      const data = await Lab.find(buildDateFilter(req.query))
-        .populate({
-          path: "patient",
-          match: { hospital: req.user.hospital }
-        })
+      const data = await Lab.find()
+        .populate({ path: "patient", match: filter })
         .lean();
 
-      return data
-        .filter(l => l.patient)
-        .map(l => ({
-          hospital: l.patient.hospital || "",
-          patient: `${l.patient.firstName || ""} ${l.patient.lastName || ""}`,
-          test: l.testName,
-          result: l.result,
-          status: l.status,
-          date: formatDate(l.createdAt)
-        }));
+      return data.filter(l => l.patient).map(l => ({
+        hospital: l.patient?.hospital || "",
+        patient: `${l.patient?.firstName || ""} ${l.patient?.lastName || ""}`,
+        test: l.testName,
+        result: l.result,
+        status: l.status,
+        date: formatDate(l.createdAt)
+      }));
     });
 
     sendCSV(res, rows, "labs-report.csv", [
@@ -221,24 +244,21 @@ const exportLabsCSV = async (req, res, next) => {
 // MEDICAL RECORDS
 const exportMedicalRecordsCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("medical", req.user.hospital, req.query, async () => {
-      const data = await MedicalRecord.find(buildDateFilter(req.query))
-        .populate({
-          path: "patient",
-          match: { hospital: req.user.hospital }
-        })
+      const data = await MedicalRecord.find(filter)
+        .populate("patient")
         .lean();
 
-      return data
-        .filter(r => r.patient)
-        .map(r => ({
-          hospital: r.patient.hospital || "",
-          patient: `${r.patient.firstName || ""} ${r.patient.lastName || ""}`,
-          diagnosis: r.diagnosis,
-          notes: r.notes,
-          doctor: r.doctor,
-          date: formatDate(r.createdAt)
-        }));
+      return data.map(r => ({
+        hospital: r.patient?.hospital || "",
+        patient: `${r.patient?.firstName || ""} ${r.patient?.lastName || ""}`,
+        diagnosis: r.diagnosis,
+        notes: r.notes,
+        doctor: r.doctor,
+        date: formatDate(r.createdAt)
+      }));
     });
 
     sendCSV(res, rows, "medical-records-report.csv", [
@@ -250,30 +270,27 @@ const exportMedicalRecordsCSV = async (req, res, next) => {
 // DISPENSE
 const exportDispenseCSV = async (req, res, next) => {
   try {
+    const filter = applyCommonFilters(req.query, req.user.hospital);
+
     const rows = await cacheCSV("dispense", req.user.hospital, req.query, async () => {
-      const data = await Dispense.find(buildDateFilter(req.query))
-        .populate({
-          path: "patient",
-          match: { hospital: req.user.hospital }
-        })
+      const data = await Dispense.find(filter)
+        .populate("patient")
         .populate("dispensedBy")
         .populate({ path: "items.medication", populate: { path: "medication" } })
         .lean();
 
-      return data
-        .filter(d => d.patient)
-        .flatMap(d =>
-          (d.items || []).map(i => ({
-            hospital: d.patient.hospital || "",
-            patient: `${d.patient.firstName || ""} ${d.patient.lastName || ""}`,
-            medication: i.medication?.medication?.name || "",
-            quantity: i.quantity || 0,
-            unitPrice: i.price || 0,
-            totalAmount: d.totalAmount || 0,
-            dispensedBy: d.dispensedBy?.name || "",
-            date: formatDate(d.createdAt)
-          }))
-        );
+      return data.flatMap(d =>
+        (d.items || []).map(i => ({
+          hospital: d.patient?.hospital || "",
+          patient: `${d.patient?.firstName || ""} ${d.patient?.lastName || ""}`,
+          medication: i.medication?.medication?.name || "",
+          quantity: i.quantity || 0,
+          unitPrice: i.price || 0,
+          totalAmount: d.totalAmount || 0,
+          dispensedBy: d.dispensedBy?.name || "",
+          date: formatDate(d.createdAt)
+        }))
+      );
     });
 
     sendCSV(res, rows, "dispense-report.csv", [
@@ -282,16 +299,129 @@ const exportDispenseCSV = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
-// ===================== MATERNITY (ALREADY GOOD) =====================
-// (kept exactly same as yours — they were already correct)
+// ======================================================
+// ===================== MATERNITY =======================
+// ======================================================
 
-const exportAntenatalCSV = async (req, res, next) => { /* unchanged */ };
-const exportAbortionsCSV = async (req, res, next) => { /* unchanged */ };
-const exportDeliveriesCSV = async (req, res, next) => { /* unchanged */ };
-const exportPostnatalCSV = async (req, res, next) => { /* unchanged */ };
-const exportReferralsCSV = async (req, res, next) => { /* unchanged */ };
+const exportAntenatalCSV = async (req, res, next) => {
+  try {
+    const rows = await cacheCSV("antenatal", req.user.hospital, req.query, async () => {
+      const visits = await AntenatalVisit.find({
+        ...applyDateFilter("visitDate", req.query)
+      })
+        .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
+        .lean();
 
-// ===================== PREVIEWS =====================
+      return visits.filter(v => v.pregnancy).map(v => ({
+        hospital: v.pregnancy?.hospital || "",
+        patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
+        visitDate: formatDate(v.visitDate),
+        gestationalAgeWeeks: v.gestationalAgeWeeks || "",
+        bloodPressure: v.bloodPressure || "",
+        weight: v.weight || "",
+        fetalHeartRate: v.fetalHeartRate || "",
+        riskLevel: v.riskLevel || "",
+        notes: v.notes || ""
+      }));
+    });
+
+    sendCSV(res, rows, "antenatal-visits-report.csv", Object.keys(rows[0] || {}));
+  } catch (err) { next(err); }
+};
+
+const exportAbortionsCSV = async (req, res, next) => {
+  try {
+    const rows = await cacheCSV("abortions", req.user.hospital, req.query, async () => {
+      const data = await Abortion.find({
+        ...applyDateFilter("date", req.query)
+      })
+        .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
+        .lean();
+
+      return data.filter(a => a.pregnancy).map(a => ({
+        hospital: a.pregnancy?.hospital || "",
+        patient: `${a.pregnancy?.patient?.firstName || ""} ${a.pregnancy?.patient?.lastName || ""}`,
+        date: formatDate(a.date),
+        type: a.type || "",
+        complications: a.complications || ""
+      }));
+    });
+
+    sendCSV(res, rows, "abortions-report.csv", Object.keys(rows[0] || {}));
+  } catch (err) { next(err); }
+};
+
+const exportDeliveriesCSV = async (req, res, next) => {
+  try {
+    const rows = await cacheCSV("deliveries", req.user.hospital, req.query, async () => {
+      const data = await Delivery.find({
+        ...applyDateFilter("deliveryDate", req.query)
+      })
+        .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
+        .lean();
+
+      return data.filter(d => d.pregnancy).map(d => ({
+        hospital: d.pregnancy?.hospital || "",
+        patient: `${d.pregnancy?.patient?.firstName || ""} ${d.pregnancy?.patient?.lastName || ""}`,
+        deliveryDate: formatDate(d.deliveryDate),
+        type: d.type || "",
+        babyWeight: d.babyWeight || "",
+        babyGender: d.babyGender || ""
+      }));
+    });
+
+    sendCSV(res, rows, "deliveries-report.csv", Object.keys(rows[0] || {}));
+  } catch (err) { next(err); }
+};
+
+const exportPostnatalCSV = async (req, res, next) => {
+  try {
+    const rows = await cacheCSV("postnatal", req.user.hospital, req.query, async () => {
+      const data = await PostnatalVisit.find({
+        ...applyDateFilter("visitDate", req.query)
+      })
+        .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
+        .lean();
+
+      return data.filter(v => v.pregnancy).map(v => ({
+        hospital: v.pregnancy?.hospital || "",
+        patient: `${v.pregnancy?.patient?.firstName || ""} ${v.pregnancy?.patient?.lastName || ""}`,
+        visitDate: formatDate(v.visitDate),
+        motherCondition: v.motherCondition || "",
+        bloodPressure: v.bloodPressure || ""
+      }));
+    });
+
+    sendCSV(res, rows, "postnatal-visits-report.csv", Object.keys(rows[0] || {}));
+  } catch (err) { next(err); }
+};
+
+const exportReferralsCSV = async (req, res, next) => {
+  try {
+    const rows = await cacheCSV("referrals", req.user.hospital, req.query, async () => {
+      const data = await Referral.find({
+        ...applyDateFilter("referralDate", req.query)
+      })
+        .populate({ path: "pregnancy", match: { hospital: req.user.hospital }, populate: { path: "patient" } })
+        .lean();
+
+      return data.filter(r => r.pregnancy).map(r => ({
+        hospital: r.pregnancy?.hospital || "",
+        patient: `${r.pregnancy?.patient?.firstName || ""} ${r.pregnancy?.patient?.lastName || ""}`,
+        referredTo: r.referredTo || "",
+        reason: r.reason || "",
+        status: r.status || ""
+      }));
+    });
+
+    sendCSV(res, rows, "referrals-report.csv", Object.keys(rows[0] || {}));
+  } catch (err) { next(err); }
+};
+
+// ======================================================
+// ===================== PREVIEWS ========================
+// ======================================================
+
 const previewPatients = makePreview(Patient, "unit", true);
 const previewDiagnosis = makePreview(Diagnosis, { path: "visit", populate: { path: "patient" } });
 const previewPrescriptions = makePreview(Prescription, { path: "visit", populate: { path: "patient" } });
@@ -305,7 +435,10 @@ const previewDeliveries = makePreview(Delivery, { path: "pregnancy", populate: {
 const previewPostnatal = makePreview(PostnatalVisit, { path: "pregnancy", populate: { path: "patient" } });
 const previewReferrals = makePreview(Referral, { path: "pregnancy", populate: { path: "patient" } });
 
-// ===================== EXPORT =====================
+// ======================================================
+// ===================== EXPORT ==========================
+// ======================================================
+
 module.exports = {
   exportPatientsCSV,
   exportDiagnosisCSV,
