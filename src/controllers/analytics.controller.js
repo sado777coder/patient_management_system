@@ -1,8 +1,23 @@
 const BedModel = require("../models/Bed");
 const AdmissionModel = require("../models/Admission");
+
 const getBedOccupancyAnalytics = async (req, res, next) => {
   try {
-    const hospital= req.user.hospital;
+    const hospital = req.user.hospital;
+
+    //  Get month/year from query
+    const { month, year } = req.query;
+
+    let dateFilter = {};
+
+    if (month && year) {
+      const start = new Date(year, month - 1, 1);
+      const end = new Date(year, month, 0, 23, 59, 59);
+
+      dateFilter = {
+        createdAt: { $gte: start, $lte: end },
+      };
+    }
 
     const totalBeds = await BedModel.countDocuments({ hospital });
 
@@ -13,10 +28,9 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
 
     const availableBeds = totalBeds - occupiedBeds;
 
+    //  RETURN NUMBER 
     const occupancyRate =
-      totalBeds === 0
-        ? 0
-        : ((occupiedBeds / totalBeds) * 100).toFixed(2);
+      totalBeds === 0 ? 0 : (occupiedBeds / totalBeds) * 100;
 
     const wardBreakdown = await BedModel.aggregate([
       { $match: { hospital } },
@@ -55,11 +69,13 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
       },
     ]);
 
+    //  FILTER admissions by month
     const avgLengthOfStayData = await AdmissionModel.aggregate([
       {
         $match: {
           hospital,
           status: "discharged",
+          ...dateFilter,
         },
       },
       {
@@ -71,19 +87,16 @@ const getBedOccupancyAnalytics = async (req, res, next) => {
     ]);
 
     const avgLengthOfStay =
-      avgLengthOfStayData?.[0]?.avgLengthOfStay != null
-        ? avgLengthOfStayData[0].avgLengthOfStay.toFixed(2)
-        : "0.00";
+      avgLengthOfStayData?.[0]?.avgLengthOfStay ?? 0;
 
     res.status(200).json({
       success: true,
-      message: "Bed occupancy analytics",
       data: {
         totalBeds,
         occupiedBeds,
         availableBeds,
-        occupancyRate: `${occupancyRate}%`,
-        averageLengthOfStay: `${avgLengthOfStay} days`,
+        occupancyRate, // ✅ NUMBER
+        averageLengthOfStay: avgLengthOfStay, // ✅ NUMBER
         wardBreakdown,
       },
     });
