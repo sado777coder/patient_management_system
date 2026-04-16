@@ -327,8 +327,9 @@ const getPregnancyTimeline = async (req, res, next) => {
       withHospital(req, { _id: id })
     ).populate("patient");
 
-    if (!pregnancy)
+    if (!pregnancy) {
       return res.status(404).json({ message: "Pregnancy not found" });
+    }
 
     const [
       antenatalVisits,
@@ -346,85 +347,50 @@ const getPregnancyTimeline = async (req, res, next) => {
 
     const timeline = [];
 
-    // Pregnancy created
     timeline.push({
       event: "Pregnancy Registered",
       date: pregnancy.createdAt,
-      details: {
-        gravida: pregnancy.gravida,
-        para: pregnancy.para
-      }
     });
 
-    // Antenatal visits
     antenatalVisits.forEach(v => {
       timeline.push({
         event: "Antenatal Visit",
         date: v.visitDate,
-        details: {
-          bloodPressure: v.bloodPressure,
-          weight: v.weight
-        }
       });
     });
 
-    // Referrals
     referrals.forEach(r => {
       timeline.push({
         event: "Referral",
         date: r.referralDate,
-        details: {
-          referredTo: r.referredTo,
-          reason: r.reason
-        }
       });
     });
 
-    // Delivery
     if (delivery) {
       timeline.push({
         event: "Delivery",
         date: delivery.deliveryDate,
-        details: {
-          type: delivery.type,
-          outcome: delivery.outcome
-        }
       });
     }
 
-    // Abortion
     if (abortion) {
       timeline.push({
         event: "Abortion",
         date: abortion.date,
-        details: {
-          reason: abortion.reason
-        }
       });
     }
 
-    // Postnatal visits
     postnatalVisits.forEach(v => {
       timeline.push({
         event: "Postnatal Visit",
         date: v.visitDate,
-        details: {
-          notes: v.notes
-        }
       });
     });
 
-    // Sort timeline
     timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
 
     res.status(200).json({
-      success: true,
-      pregnancy: {
-        id: pregnancy._id,
-        patient: pregnancy.patient,
-        status: pregnancy.status
-      },
-      timeline
+      timeline,
     });
 
   } catch (err) {
@@ -443,8 +409,9 @@ const getPregnancySummary = async (req, res, next) => {
       withHospital(req, { _id: id })
     ).populate("patient");
 
-    if (!pregnancy)
+    if (!pregnancy) {
       return res.status(404).json({ message: "Pregnancy not found" });
+    }
 
     const [antenatalCount, postnatalCount, delivery, abortion, referral] =
       await Promise.all([
@@ -459,17 +426,19 @@ const getPregnancySummary = async (req, res, next) => {
         ReferralModel.findOne(withHospital(req, { pregnancy: id })),
       ]);
 
-    res.status(200).json({
-      success: true,
-      data: {
-        pregnancy,
-        statistics: {
-          antenatalVisits: antenatalCount,
-          postnatalVisits: postnatalCount,
-        },
-        events: { delivery, abortion, referral },
+    const summary = {
+      pregnancy,
+      statistics: {
+        antenatalVisits: antenatalCount,
+        postnatalVisits: postnatalCount,
       },
+      events: { delivery, abortion, referral },
+    };
+
+    res.status(200).json({
+      data: summary,
     });
+
   } catch (err) {
     next(err);
   }
