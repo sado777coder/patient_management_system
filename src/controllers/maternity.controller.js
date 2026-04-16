@@ -241,7 +241,7 @@ const createDelivery = async (req, res, next) => {
 
    await logAudit({
   hospitalId: req.user.hospital,
-  userId: req.user.id,
+  user: req.user._id,
   action: "CREATE_DELIVERY",
   entity: "Delivery",
   entityId: delivery._id,

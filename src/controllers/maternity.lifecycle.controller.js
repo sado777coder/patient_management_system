@@ -68,7 +68,7 @@ if (existingAbortion)
     // Audit
     await logAudit({
   hospitalId: req.user.hospital,
-  userId: req.user.id,
+  user: req.user._id,
   action: "CREATE_ABORTION",
   entity: "Abortion",
   entityId: abortion._id,
@@ -176,7 +176,7 @@ const createPostnatalVisit = async (req, res, next) => {
 
    await logAudit({
   hospitalId: req.user.hospital,
-  userId: req.user.id,
+  user: req.user._id,
   action: "CREATE_POSTNATAL_VISIT",
   entity: "PostnatalVisit",
   entityId: visit._id,
@@ -261,7 +261,7 @@ const createReferral = async (req, res, next) => {
 
     await logAudit({
   hospitalId: req.user.hospital,
-  userId: req.user.id,
+  user: req.user._id,
   action: "CREATE_REFERRAL",
   entity: "Referral",
   entityId: referral._id,

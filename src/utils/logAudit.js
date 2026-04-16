@@ -2,23 +2,23 @@ const AuditLog = require("../models/AuditLog");
 
 const logAudit = async ({
   hospitalId,
-  userId,
+  user,
   action,
   entity,
   entityId,
-  metadata
+  metadata = {},
 }) => {
   try {
     await AuditLog.create({
       hospital: hospitalId,
-      user: userId,
+      user: user || null, 
       action,
       entity,
       entityId,
-      metadata
+      metadata,
     });
   } catch (err) {
-    console.error("Audit log failed:", err.message);
+    console.error("Audit log error:", err.message);
   }
 };
 
