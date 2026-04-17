@@ -11,7 +11,7 @@ const SALT_ROUNDS = 10;
 const registerUser = async (req, res, next) => {
   try {
     let { name, email, password, role, hospital } = req.body;
-    email = email.toLowerCase();
+    email = email.trim().toLowerCase();
 
     const existing = await UserModel.findOne({ email, isDeleted: false });
 
@@ -101,7 +101,7 @@ const registerUser = async (req, res, next) => {
 const loginUser = async (req, res, next) => {
   try {
     let { email, password } = req.body;
-    email = email.toLowerCase();
+    email = email.trim().toLowerCase();
     console.log("LOGIN EMAIL:", email);
 
     const user = await UserModel.findOne({ email: email.toLowerCase() })
