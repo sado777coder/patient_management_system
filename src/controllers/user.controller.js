@@ -11,6 +11,7 @@ const SALT_ROUNDS = 10;
 const registerUser = async (req, res, next) => {
   try {
     let { name, email, password, role, hospital } = req.body;
+    email = email.toLowerCase();
 
     const existing = await UserModel.findOne({ email, isDeleted: false });
 
@@ -99,9 +100,12 @@ const registerUser = async (req, res, next) => {
  */
 const loginUser = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    let { email, password } = req.body;
+    email = email.toLowerCase();
+    console.log("LOGIN EMAIL:", email);
 
-    const user = await UserModel.findOne({ email }).populate("hospital", "name");
+    const user = await UserModel.findOne({ email: email.toLowerCase() })
+    .populate("hospital", "name");
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
@@ -110,6 +114,7 @@ const loginUser = async (req, res, next) => {
       return res.status(403).json({ message: "Account disabled" });
 
     const match = await bcrypt.compare(password, user.password);
+    console.log("PASSWORD MATCH:", match);
 
     if (!match)
       return res.status(401).json({ message: "Invalid credentials" });
@@ -117,7 +122,7 @@ const loginUser = async (req, res, next) => {
     const token = generateToken(user);
 
     if (user.mustChangePassword) {
-      return res.status(403).json({
+      return res.status(200).json({
         message: "Password change required",
         mustChangePassword: true,
         token,
@@ -161,6 +166,7 @@ const changePassword = async (req, res, next) => {
     }
 
     const user = await UserModel.findById(req.user._id);
+    console.log("CHANGE PASSWORD USER:", req.user);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
