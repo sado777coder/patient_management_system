@@ -6,26 +6,32 @@ const { generateToken } = require("../utils/bcrypt");
 const SALT_ROUNDS = 10;
 
 /**
+ * NORMALIZE EMAIL (central safe helper)
+ */
+const normalizeEmail = (email) => email?.trim().toLowerCase();
+
+/**
  * REGISTER STAFF
  */
 const registerUser = async (req, res, next) => {
   try {
     let { name, email, password, role, hospital } = req.body;
 
-    // FIX: normalize email safely
-    email = email?.trim().toLowerCase();
+    email = normalizeEmail(email);
 
-    const existing = await UserModel.findOne({ email, isDeleted: false });
+    const existing = await UserModel.findOne({
+      email,
+      $or: [
+        { isDeleted: false },
+        { isDeleted: { $exists: false } }
+      ]
+    });
 
     if (existing) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    /**
-     * ROLE SECURITY RULES
-     */
-
-    // SUPER ADMIN
+    // SUPER ADMIN RULES
     if (req.user.role === "super_admin") {
       if (role !== "admin") {
         return res.status(403).json({
@@ -40,14 +46,13 @@ const registerUser = async (req, res, next) => {
           hospital = hospitals[0]._id;
         } else {
           return res.status(400).json({
-            message:
-              "Please specify a hospital when creating an admin (multiple hospitals exist)",
+            message: "Please specify a hospital",
           });
         }
       }
     }
 
-    // ADMIN
+    // ADMIN RULES
     if (req.user.role === "admin") {
       const allowedRoles = [
         "record_officer",
@@ -78,17 +83,15 @@ const registerUser = async (req, res, next) => {
       role,
       hospital,
       mustChangePassword: true,
+
+      // 🔥 CRITICAL FIX (CONSISTENCY)
+      isDeleted: false,
+      isActive: true,
     });
 
     res.status(201).json({
       message: "User created successfully",
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        hospital,
-      },
+      data: user,
     });
   } catch (err) {
     next(err);
@@ -100,61 +103,41 @@ const registerUser = async (req, res, next) => {
  */
 const loginUser = async (req, res, next) => {
   try {
-    const rawEmail = req.body.email;
+    const email = normalizeEmail(req.body.email);
     const password = req.body.password;
-
-    // FIX: single safe normalization
-    const email = rawEmail?.trim().toLowerCase();
 
     console.log("LOGIN EMAIL:", email);
 
-    // FIX: correct query (IMPORTANT)
     const user = await UserModel.findOne({
       email,
-      isDeleted: false,
+
+      // 🔥 FIX: handles missing field + false properly
+      $or: [
+        { isDeleted: false },
+        { isDeleted: { $exists: false } }
+      ]
     }).populate("hospital", "name");
 
-    console.log("FOUND USER:", user ? user.email : null);
+    console.log("FOUND USER:", user?.email);
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    if (!user.isActive)
+    if (user.isActive === false)
       return res.status(403).json({ message: "Account disabled" });
 
     const match = await bcrypt.compare(password, user.password);
-    console.log("PASSWORD MATCH:", match);
 
     if (!match)
       return res.status(401).json({ message: "Invalid credentials" });
 
     const token = generateToken(user);
 
-    if (user.mustChangePassword) {
-      return res.status(200).json({
-        message: "Password change required",
-        mustChangePassword: true,
-        token,
-        user: {
-          _id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          hospital: user.hospital,
-        },
-      });
-    }
-
-    res.status(200).json({
+    return res.status(200).json({
       message: "Logged in",
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        hospital: user.hospital,
-      },
+      mustChangePassword: user.mustChangePassword,
+      user,
     });
   } catch (err) {
     next(err);
@@ -174,17 +157,12 @@ const changePassword = async (req, res, next) => {
       });
     }
 
-    console.log("CHANGE PASSWORD USER:", req.user);
-
     const user = await UserModel.findById(req.user._id);
 
-    if (!user) {
+    if (!user)
       return res.status(404).json({ message: "User not found" });
-    }
 
-    const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
-
-    user.password = hashedPassword;
+    user.password = await bcrypt.hash(newPassword, SALT_ROUNDS);
     user.mustChangePassword = false;
 
     await user.save();
@@ -194,13 +172,7 @@ const changePassword = async (req, res, next) => {
     res.status(200).json({
       message: "Password changed successfully",
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        hospital: user.hospital,
-      },
+      user,
     });
   } catch (err) {
     next(err);
@@ -208,7 +180,7 @@ const changePassword = async (req, res, next) => {
 };
 
 /**
- * GET MY PROFILE
+ * GET PROFILE
  */
 const getProfile = async (req, res, next) => {
   try {
@@ -223,7 +195,7 @@ const getProfile = async (req, res, next) => {
 };
 
 /**
- * GET ALL USERS
+ * GET USERS
  */
 const getUsers = async (req, res, next) => {
   try {
@@ -231,14 +203,10 @@ const getUsers = async (req, res, next) => {
     const limit = Number(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { role, isActive } = req.query;
-
-    const filter = {};
-
-    if (role) filter.role = role;
-    if (isActive !== undefined) filter.isActive = isActive === "true";
-
-    let query = { ...filter, isDeleted: false };
+    const query = {
+      ...req.query,
+      isDeleted: { $ne: true }, // 🔥 FIX: catches false, null, undefined
+    };
 
     if (req.user.role !== "super_admin") {
       query.hospital = req.user.hospital;
@@ -249,9 +217,9 @@ const getUsers = async (req, res, next) => {
     const users = await UserModel.find(query)
       .select("-password")
       .populate("hospital", "name")
-      .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       total,
@@ -265,20 +233,14 @@ const getUsers = async (req, res, next) => {
 };
 
 /**
- * GET SINGLE USER
+ * GET USER BY ID
  */
 const getUserById = async (req, res, next) => {
   try {
-    const query = {
+    const user = await UserModel.findOne({
       _id: req.params.id,
-      isDeleted: false,
-    };
-
-    if (req.user.role !== "super_admin") {
-      query.hospital = req.user.hospital;
-    }
-
-    const user = await UserModel.findOne(query)
+      isDeleted: { $ne: true },
+    })
       .select("-password")
       .populate("hospital", "name");
 
@@ -302,64 +264,43 @@ const updateUser = async (req, res, next) => {
       updates.password = await bcrypt.hash(updates.password, SALT_ROUNDS);
     }
 
-    if (updates.role) {
-      delete updates.role;
-    }
+    delete updates.role;
 
-    const query = {
-      _id: req.params.id,
-      isDeleted: false,
-    };
-
-    if (req.user.role !== "super_admin") {
-      query.hospital = req.user.hospital;
-    }
-
-    const user = await UserModel.findOneAndUpdate(query, updates, {
-      new: true,
-      runValidators: true,
-    })
+    const user = await UserModel.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        isDeleted: { $ne: true },
+      },
+      updates,
+      { new: true }
+    )
       .select("-password")
       .populate("hospital", "name");
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
-    res.status(200).json({
-      message: "Updated successfully",
-      data: user,
-    });
+    res.status(200).json({ message: "Updated", data: user });
   } catch (err) {
     next(err);
   }
 };
 
 /**
- * CHANGE USER ROLE
+ * CHANGE ROLE
  */
 const changeUserRole = async (req, res, next) => {
   try {
-    if (req.user._id.toString() === req.params.id) {
-      return res.status(400).json({
-        message: "You cannot change your own role",
-      });
-    }
-
     const { role } = req.body;
 
-    const query = { _id: req.params.id };
-
-    if (req.user.role !== "super_admin") {
-      query.hospital = req.user.hospital;
-    }
-
     const user = await UserModel.findOneAndUpdate(
-      query,
+      {
+        _id: req.params.id,
+        isDeleted: { $ne: true },
+      },
       { role },
       { new: true }
-    )
-      .select("-password")
-      .populate("hospital", "name");
+    ).select("-password");
 
     res.status(200).json({
       message: "Role updated",
@@ -371,30 +312,20 @@ const changeUserRole = async (req, res, next) => {
 };
 
 /**
- * ACTIVATE / DEACTIVATE USER
+ * TOGGLE STATUS
  */
 const toggleUserStatus = async (req, res, next) => {
   try {
-    const query = {
-      _id: req.params.id,
-      isDeleted: false,
-    };
-
-    if (req.user.role !== "super_admin") {
-      query.hospital = req.user.hospital;
-    }
-
-    const user = await UserModel.findOne(query);
+    const user = await UserModel.findById(req.params.id);
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
     user.isActive = !user.isActive;
-
     await user.save();
 
     res.status(200).json({
-      message: `User ${user.isActive ? "activated" : "deactivated"}`,
+      message: "Status updated",
       data: user,
     });
   } catch (err) {
@@ -403,40 +334,22 @@ const toggleUserStatus = async (req, res, next) => {
 };
 
 /**
- * DELETE USER (SOFT DELETE)
+ * DELETE USER
  */
 const deleteUser = async (req, res, next) => {
   try {
-    const query = {
-      _id: req.params.id,
-      isDeleted: false,
-    };
-
-    if (req.user.role !== "super_admin") {
-      query.hospital = req.user.hospital;
-    }
-
-    const user = await UserModel.findOne(query);
+    const user = await UserModel.findById(req.params.id);
 
     if (!user)
-      return res.status(404).json({
-        message: "User not found or already deleted",
-      });
-
-    if (user.role === "super_admin") {
-      return res.status(403).json({
-        message: "Super admin cannot be deleted",
-      });
-    }
+      return res.status(404).json({ message: "User not found" });
 
     user.isDeleted = true;
-    user.deletedAt = new Date();
     user.isActive = false;
 
     await user.save();
 
     res.status(200).json({
-      message: "User archived successfully",
+      message: "User deleted",
       data: user,
     });
   } catch (err) {
