@@ -172,7 +172,8 @@ const changePassword = async (req, res, next) => {
     user.mustChangePassword = false;
 
     await user.save();
-
+    
+    const token = generateToken(user);
     res.status(200).json({
   message: "Password changed successfully",
   token, 
