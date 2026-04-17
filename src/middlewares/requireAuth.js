@@ -37,7 +37,7 @@ const requireAuth = async (req, res, next) => {
      */
     if (
       user.mustChangePassword &&
-      req.path !== "/change-password"
+      !req.originalUrl.includes("change-password")
     ) {
       return res.status(403).json({
         message: "Password change required",

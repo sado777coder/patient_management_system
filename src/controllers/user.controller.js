@@ -174,8 +174,16 @@ const changePassword = async (req, res, next) => {
     await user.save();
 
     res.status(200).json({
-      message: "Password changed successfully. You can now login.",
-    });
+  message: "Password changed successfully",
+  token, 
+  user: {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    hospital: user.hospital,
+  },
+});
   } catch (err) {
     next(err);
   }
