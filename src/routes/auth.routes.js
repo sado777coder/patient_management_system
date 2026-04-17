@@ -21,8 +21,11 @@ const {
 router.post("/login", validate(loginUserValidator), loginUser);
 
 // everything below requires auth
-router.use(requireAuth);
-router.patch("/change-password", changePassword);
+router.post(
+  "/change-password",
+  requireAuth,
+  changePassword
+);
 
 router.post(
   "/register",
