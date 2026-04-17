@@ -11,7 +11,9 @@ const SALT_ROUNDS = 10;
 const registerUser = async (req, res, next) => {
   try {
     let { name, email, password, role, hospital } = req.body;
-    email = email.trim().toLowerCase();
+
+    // FIX: normalize email safely
+    email = email?.trim().toLowerCase();
 
     const existing = await UserModel.findOne({ email, isDeleted: false });
 
@@ -31,7 +33,6 @@ const registerUser = async (req, res, next) => {
         });
       }
 
-      // Auto assign hospital if only one exists
       if (!hospital) {
         const hospitals = await HospitalModel.find({ isActive: true });
 
@@ -65,7 +66,6 @@ const registerUser = async (req, res, next) => {
         });
       }
 
-      // Force hospital
       hospital = req.user.hospital;
     }
 
@@ -100,12 +100,21 @@ const registerUser = async (req, res, next) => {
  */
 const loginUser = async (req, res, next) => {
   try {
-    let { email, password } = req.body;
-    email = email.trim().toLowerCase();
+    const rawEmail = req.body.email;
+    const password = req.body.password;
+
+    // FIX: single safe normalization
+    const email = rawEmail?.trim().toLowerCase();
+
     console.log("LOGIN EMAIL:", email);
 
-    const user = await UserModel.findOne({ email: email.toLowerCase() })
-    .populate("hospital", "name");
+    // FIX: correct query (IMPORTANT)
+    const user = await UserModel.findOne({
+      email,
+      isDeleted: false,
+    }).populate("hospital", "name");
+
+    console.log("FOUND USER:", user ? user.email : null);
 
     if (!user)
       return res.status(404).json({ message: "User not found" });
@@ -165,8 +174,9 @@ const changePassword = async (req, res, next) => {
       });
     }
 
-    const user = await UserModel.findById(req.user._id);
     console.log("CHANGE PASSWORD USER:", req.user);
+
+    const user = await UserModel.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -178,19 +188,20 @@ const changePassword = async (req, res, next) => {
     user.mustChangePassword = false;
 
     await user.save();
-    
+
     const token = generateToken(user);
+
     res.status(200).json({
-  message: "Password changed successfully",
-  token, 
-  user: {
-    _id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    hospital: user.hospital,
-  },
-});
+      message: "Password changed successfully",
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        hospital: user.hospital,
+      },
+    });
   } catch (err) {
     next(err);
   }
