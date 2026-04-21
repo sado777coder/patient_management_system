@@ -81,7 +81,6 @@ const registerUser = async (req, res, next) => {
       hospital,
       mustChangePassword: true,
 
-      // 🔥 CRITICAL FIX (CONSISTENCY)
       isDeleted: false,
       isActive: true,
     });
@@ -106,8 +105,8 @@ const loginUser = async (req, res, next) => {
     console.log("LOGIN EMAIL:", email);
 
     const user = await UserModel.findOne({
-  email,
-  isDeleted: { $ne: true } 
+  email: { $regex: `^${email}$`, $options: "i" },
+  isDeleted: { $ne: true }
 }).populate("hospital", "name");
 
     console.log("FOUND USER:", user?.email);
