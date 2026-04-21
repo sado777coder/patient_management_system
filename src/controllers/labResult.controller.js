@@ -138,30 +138,24 @@ const getLabResults = async (req, res, next) => {
 
     let filter = { hospital: req.user.hospital };
 
+    let resultsQuery = LabResultModel.find(filter)
+      .populate({
+        path: "visit",
+        populate: {
+          path: "patient",
+          select: "firstName lastName",
+        },
+      })
+      .sort({ createdAt: -1 });
+
     if (search) {
-      filter.testName = { $regex: search, $options: "i" };
+      resultsQuery = resultsQuery.find({
+        testName: { $regex: search, $options: "i" },
+      });
     }
 
     const [results, total] = await Promise.all([
-      LabResultModel.find(filter)
-        .populate({
-          path: "labOrder",
-          populate: {
-            path: "diagnosis",
-            populate: {
-              path: "visit",
-              populate: {
-                path: "patient",
-                select: "firstName lastName",
-              },
-            },
-          },
-        })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-
+      resultsQuery.skip(skip).limit(limit).lean(),
       LabResultModel.countDocuments(filter),
     ]);
 
@@ -176,6 +170,7 @@ const getLabResults = async (req, res, next) => {
         limit,
       },
     });
+
   } catch (err) {
     next(err);
   }
