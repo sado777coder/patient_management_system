@@ -21,10 +21,7 @@ const registerUser = async (req, res, next) => {
 
     const existing = await UserModel.findOne({
       email,
-      $or: [
-        { isDeleted: false },
-        { isDeleted: { $exists: false } }
-      ]
+      isDeleted: { $ne: true },
     });
 
     if (existing) {
@@ -109,14 +106,9 @@ const loginUser = async (req, res, next) => {
     console.log("LOGIN EMAIL:", email);
 
     const user = await UserModel.findOne({
-      email,
-
-      // 🔥 FIX: handles missing field + false properly
-      $or: [
-        { isDeleted: false },
-        { isDeleted: { $exists: false } }
-      ]
-    }).populate("hospital", "name");
+  email,
+  isDeleted: { $ne: true } 
+}).populate("hospital", "name");
 
     console.log("FOUND USER:", user?.email);
 
@@ -205,7 +197,7 @@ const getUsers = async (req, res, next) => {
 
     const query = {
       ...req.query,
-      isDeleted: { $ne: true }, // 🔥 FIX: catches false, null, undefined
+      isDeleted: { $ne: true }, 
     };
 
     if (req.user.role !== "super_admin") {
