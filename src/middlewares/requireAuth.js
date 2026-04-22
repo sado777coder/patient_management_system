@@ -8,7 +8,7 @@ const requireAuth = async (req, res, next) => {
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return res.status(401).json({
-      error: "Access denied. No token provided."
+      message: "Access denied. No token provided."
     });
   }
 
@@ -17,7 +17,8 @@ const requireAuth = async (req, res, next) => {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
-    const user = await userModel.findById(payload.userId);
+    
+    const user = await userModel.findById(payload.id || payload.userId);
 
     if (!user) {
       return res.status(404).json({
@@ -25,16 +26,12 @@ const requireAuth = async (req, res, next) => {
       });
     }
 
-    // Block inactive users
     if (user.isActive === false) {
       return res.status(403).json({
         message: "Account is disabled"
       });
     }
 
-    /**
-     * Allow only change-password route
-     */
     if (
       user.mustChangePassword &&
       !req.originalUrl.includes("change-password")
@@ -45,10 +42,6 @@ const requireAuth = async (req, res, next) => {
       });
     }
 
-    /**
-     * HOSPITAL SUSPENSION CHECK
-     * Skip for SUPER_ADMIN
-     */
     if (user.role !== permissions.SUPER_ADMIN && user.hospital) {
       const hospital = await hospitalModel.findById(user.hospital);
 
@@ -59,9 +52,6 @@ const requireAuth = async (req, res, next) => {
       }
     }
 
-    /**
-     * Attach safe user object
-     */
     req.user = {
       _id: user._id,
       name: user.name,
@@ -76,7 +66,7 @@ const requireAuth = async (req, res, next) => {
     console.error(error);
 
     return res.status(401).json({
-      error: "Invalid or expired token"
+      message: "Invalid or expired token"
     });
   }
 };
