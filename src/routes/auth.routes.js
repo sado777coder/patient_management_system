@@ -29,6 +29,7 @@ router.post(
 
 router.post(
   "/register",
+  requireAuth, 
   allowRoles(permissions.SUPER_ADMIN, permissions.MANAGE_USERS),
   validate(registerUserValidator),
   registerUser
