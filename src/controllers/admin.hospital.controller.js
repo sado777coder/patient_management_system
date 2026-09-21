@@ -1,27 +1,145 @@
+const bcrypt = require("bcrypt");
+
 const HospitalModel = require("../models/Hospital");
+const UserModel = require("../models/User");
+
+const SALT_ROUNDS = 10;
 
 /**
- * CREATE HOSPITAL
- * POST /admin/hospitals
+ * CREATE HOSPITAL + FIRST ADMIN
+ *
+ * POST /api/admin/hospitals
+ *
+ * ONLY SUPER_ADMIN can access this route.
  */
 const createHospital = async (req, res, next) => {
   try {
-    const hospital = await HospitalModel.create(req.body);
+    const {
+      name,
+      code,
+      address,
+      phone,
+      email,
+      admin,
+    } = req.body;
 
-    res.status(201).json({
-      success: true,
-      message: "Hospital created successfully",
-      data: hospital,
+    // -----------------------------------------
+    // 1. Check hospital code
+    // -----------------------------------------
+    const existingHospital = await HospitalModel.findOne({
+      code: code.toUpperCase(),
     });
+
+    if (existingHospital) {
+      return res.status(409).json({
+        success: false,
+        message: "A hospital with this code already exists",
+      });
+    }
+
+    // -----------------------------------------
+    // 2. Check admin email
+    // -----------------------------------------
+    const normalizedAdminEmail = admin.email.trim().toLowerCase();
+
+    const existingUser = await UserModel.findOne({
+      email: normalizedAdminEmail,
+      isDeleted: { $ne: true },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "A user with this email already exists",
+      });
+    }
+
+    // -----------------------------------------
+    // 3. Create hospital
+    // -----------------------------------------
+    const hospital = await HospitalModel.create({
+      name,
+      code: code.toUpperCase(),
+      address,
+      phone,
+      email,
+      isActive: true,
+    });
+
+    try {
+      // -----------------------------------------
+      // 4. Hash first admin password
+      // -----------------------------------------
+      const hashedPassword = await bcrypt.hash(
+        admin.password,
+        SALT_ROUNDS
+      );
+
+      // -----------------------------------------
+      // 5. Create hospital admin
+      // -----------------------------------------
+      const hospitalAdmin = await UserModel.create({
+        name: admin.name,
+        email: normalizedAdminEmail,
+        password: hashedPassword,
+
+        role: "admin",
+
+        // IMPORTANT:
+        // Connect admin to the hospital just created
+        hospital: hospital._id,
+
+        mustChangePassword: true,
+        isActive: true,
+        isDeleted: false,
+      });
+
+      // -----------------------------------------
+      // 6. Return result
+      // -----------------------------------------
+      return res.status(201).json({
+        success: true,
+        message: "Hospital and hospital admin created successfully",
+
+        data: {
+          hospital,
+
+          admin: {
+            _id: hospitalAdmin._id,
+            name: hospitalAdmin.name,
+            email: hospitalAdmin.email,
+            role: hospitalAdmin.role,
+            hospital: hospitalAdmin.hospital,
+            mustChangePassword: hospitalAdmin.mustChangePassword,
+            isActive: hospitalAdmin.isActive,
+          },
+        },
+      });
+    } catch (userError) {
+      // -----------------------------------------
+      // Roll back hospital if admin creation fails
+      // -----------------------------------------
+      await HospitalModel.findByIdAndDelete(hospital._id);
+
+      throw userError;
+    }
   } catch (err) {
+    // MongoDB duplicate key protection
+    if (err.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Hospital code or user email already exists",
+      });
+    }
+
     next(err);
   }
 };
 
-
 /**
- * GET ALL HOSPITALS (Paginated)
- * GET /admin/hospitals
+ * GET ALL HOSPITALS
+ *
+ * GET /api/admin/hospitals
  */
 const getHospitals = async (req, res, next) => {
   try {
@@ -53,10 +171,10 @@ const getHospitals = async (req, res, next) => {
   }
 };
 
-
 /**
  * GET SINGLE HOSPITAL
- * GET /admin/hospitals/:id
+ *
+ * GET /api/admin/hospitals/:id
  */
 const getHospitalById = async (req, res, next) => {
   try {
@@ -78,17 +196,20 @@ const getHospitalById = async (req, res, next) => {
   }
 };
 
-
 /**
  * UPDATE HOSPITAL
- * PUT /admin/hospitals/:id
+ *
+ * PUT /api/admin/hospitals/:id
  */
 const updateHospital = async (req, res, next) => {
   try {
     const hospital = await HospitalModel.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      }
     );
 
     if (!hospital) {
@@ -104,18 +225,34 @@ const updateHospital = async (req, res, next) => {
       data: hospital,
     });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Hospital code already exists",
+      });
+    }
+
     next(err);
   }
 };
 
-
 /**
- * DELETE HOSPITAL
- * DELETE /admin/hospitals/:id
+ * DELETE /api/admin/hospitals/:id
+ *
+ * IMPORTANT:
+ * We deactivate instead of physically deleting.
  */
 const deleteHospital = async (req, res, next) => {
   try {
-    const hospital = await HospitalModel.findByIdAndDelete(req.params.id);
+    const hospital = await HospitalModel.findByIdAndUpdate(
+      req.params.id,
+      {
+        isActive: false,
+      },
+      {
+        new: true,
+      }
+    );
 
     if (!hospital) {
       return res.status(404).json({
@@ -126,7 +263,8 @@ const deleteHospital = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Hospital deleted successfully",
+      message: "Hospital deactivated successfully",
+      data: hospital,
     });
   } catch (err) {
     next(err);

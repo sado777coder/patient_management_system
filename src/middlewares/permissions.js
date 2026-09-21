@@ -1,4 +1,3 @@
-const Triage = require("../models/Triage");
 
 const permissions = {
   REGISTER_PATIENT: ["admin", "record_officer"],

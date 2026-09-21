@@ -9,7 +9,12 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const logRequest = require("./middlewares/logRequest");
 const errorHandler = require("./middlewares/errorHandler");
 
-const createHospitalRoute = require("./routes/admin.hospital.routes");
+// SUPER_ADMIN: platform-level hospital management
+const adminHospitalRoute = require("./routes/admin.hospital.routes");
+
+// Hospital user: current hospital/tenant management
+const hospitalRoute = require("./routes/hospital.routes");
+
 const authRoute = require("./routes/auth.routes");
 const userRoute = require("./routes/users.routes");
 const patientsRoute = require("./routes/patients.routes");
@@ -37,7 +42,6 @@ const diagnosisRoute = require("./routes/diagnoses.routes");
 const medicationStockRoutes = require("./routes/medicationStock.routes");
 const medicationRoute = require("./routes/medication.routes");
 const labOrderRoute = require("./routes/labOrders.routes");
-const hospitalRoute = require("./routes/hospital.routes");
 const { swaggerUi, swaggerSpec } = require("./config/swagger");
 
 const app = express();
@@ -108,7 +112,7 @@ app.get("/cancel", (req, res) => res.send("Payment Cancelled"));
 app.get("/success", (req, res) => res.send("Payment Successful"));
 
 // --- Main Routes ---
-app.use("/api/hospitals", createHospitalRoute );
+app.use("/api/admin/hospitals", adminHospitalRoute );
 app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/patients", patientsRoute);

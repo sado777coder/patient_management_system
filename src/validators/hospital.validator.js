@@ -1,7 +1,7 @@
 const Joi = require("joi");
 
 /**
- * CREATE HOSPITAL
+ * CREATE HOSPITAL + FIRST ADMIN
  */
 const createHospitalValidator = Joi.object({
   name: Joi.string().trim().required(),
@@ -12,16 +12,24 @@ const createHospitalValidator = Joi.object({
     .pattern(/^[A-Z0-9-]+$/)
     .required()
     .messages({
-      "string.pattern.base": "Code must contain only letters, numbers and hyphens",
+      "string.pattern.base":
+        "Code must contain only letters, numbers and hyphens",
     }),
 
   address: Joi.string().trim().optional(),
 
   phone: Joi.string().trim().optional(),
 
-  email: Joi.string().email().optional(),
-});
+  email: Joi.string().email().trim().lowercase().optional(),
 
+  admin: Joi.object({
+    name: Joi.string().min(2).trim().required(),
+
+    email: Joi.string().email().trim().lowercase().required(),
+
+    password: Joi.string().min(8).required(),
+  }).required(),
+});
 
 /**
  * UPDATE HOSPITAL
@@ -39,7 +47,7 @@ const updateHospitalValidator = Joi.object({
 
   phone: Joi.string().trim().optional(),
 
-  email: Joi.string().email().optional(),
+  email: Joi.string().email().trim().lowercase().optional(),
 }).min(1);
 
 module.exports = {

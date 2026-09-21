@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 const hashPassowrd = async (password) => {
   const salt = await bcrypt.genSalt(12);
   const hash = await bcrypt.hash(password, salt);
-  return hash; 
+  return hash;
 };
 
 // Generate JWT
@@ -14,8 +14,8 @@ const generateToken = (user) => {
     {
       userId: user._id,
       username: user.name,
-      hospitalId: user.hospitalId,
-      role: user.role 
+      hospitalId: user.hospital,
+      role: user.role,
     },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
